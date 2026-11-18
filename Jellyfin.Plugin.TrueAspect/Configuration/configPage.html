@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>TrueAspect</title>
+</head>
+<body>
+<div id="TrueAspectConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+     data-require="emby-input,emby-button,emby-checkbox">
+    <div data-role="content">
+        <div class="content-primary">
+            <h2 class="sectionTitle">TrueAspect</h2>
+
+            <form id="TrueAspectConfigForm">
+                <div class="verticalSection">
+                    <h3 class="sectionTitle">Home Assistant</h3>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="url" id="HomeAssistantUrl" label="Home Assistant URL" placeholder="http://host.docker.internal:8123" />
+                        <div class="fieldDescription">Base address of Home Assistant as seen from the Jellyfin server. Use host.docker.internal when Jellyfin runs in Docker on the same host.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="WebhookId" label="Webhook ID" />
+                        <div class="fieldDescription">The webhook_id of the Home Assistant automation trigger. Every playback start, on any device, is posted with its device name, item and aspect ratio. Filter devices in the automation.</div>
+                    </div>
+                    <div class="fieldDescription" id="WebhookPreview"></div>
+                </div>
+
+                <div class="verticalSection">
+                    <h3 class="sectionTitle">Detection</h3>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="ScanMovies" />
+                        <span>Scan movies</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="ScanEpisodes" />
+                        <span>Scan TV episodes</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="ScanOnItemAdded" />
+                        <span>Scan new items as they are added</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="SampleCount" min="3" max="60" label="Samples per item" />
+                        <div class="fieldDescription">Points through the video where cropdetect runs. The median wins.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="FramesPerSample" min="2" max="60" label="Frames per sample" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="BlackLimit" min="0.01" max="0.5" step="0.01" label="Black threshold" />
+                        <div class="fieldDescription">cropdetect limit as a fraction of full range. Raise it if dark bars are not being detected.</div>
+                    </div>
+                </div>
+
+                <div>
+                    <button is="emby-button" type="submit" class="raised button-submit block emby-button"><span>Save</span></button>
+                    <button is="emby-button" type="button" id="TestWebhook" class="raised block emby-button"><span>Send test webhook</span></button>
+                </div>
+            </form>
+
+            <div class="verticalSection" style="margin-top:2em">
+                <h3 class="sectionTitle">Detected ratios</h3>
+                <div style="display:flex;gap:1em;align-items:center;flex-wrap:wrap">
+                    <input is="emby-input" type="search" id="Filter" label="Filter" style="min-width:16em" />
+                    <span id="Summary"></span>
+                    <button is="emby-button" type="button" id="RetryFailed" class="raised emby-button"><span>Retry failed</span></button>
+                </div>
+                <p class="fieldDescription">New scans run from Dashboard &rsaquo; Scheduled Tasks &rsaquo; Detect aspect ratios, and automatically for new items. Setting a ratio by hand marks it manual so it is never rescanned.</p>
+                <table class="detailTable" style="width:100%">
+                    <thead>
+                    <tr><th style="text-align:left">Title</th><th>Ratio</th><th>Source</th><th>Override</th><th></th></tr>
+                    </thead>
+                    <tbody id="RatioRows"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            const pluginId = 'b3512314-ef01-4cde-8b1b-71b3ef6046a0';
+            const page = document.querySelector('#TrueAspectConfigPage');
+            const textFields = ['HomeAssistantUrl', 'WebhookId'];
+            const numberFields = ['SampleCount', 'FramesPerSample', 'BlackLimit'];
+            const checkFields = ['ScanMovies', 'ScanEpisodes', 'ScanOnItemAdded'];
+            let entries = [];
+
+            const api = (method, path, body) => ApiClient.ajax({
+                type: method,
+                url: ApiClient.getUrl(path),
+                data: body ? JSON.stringify(body) : undefined,
+                contentType: body ? 'application/json' : undefined,
+                dataType: method === 'GET' || method === 'PUT' || path.startsWith('TrueAspect/TestWebhook') ? 'json' : undefined
+            });
+
+            function cell(text) {
+                const td = document.createElement('td');
+                td.textContent = text;
+                td.style.textAlign = 'center';
+                return td;
+            }
+
+            function render() {
+                const filter = page.querySelector('#Filter').value.trim().toLowerCase();
+                const rows = page.querySelector('#RatioRows');
+                rows.replaceChildren();
+                const shown = entries.filter(e => !filter || e.Name.toLowerCase().includes(filter) || String(e.Ratio).startsWith(filter) || e.Source.toLowerCase() === filter);
+                for (const e of shown.slice(0, 300)) {
+                    const tr = document.createElement('tr');
+                    const name = cell(e.Name);
+                    name.style.textAlign = 'left';
+                    tr.append(name, cell(e.Ratio == null ? '—' : e.Ratio.toFixed(2)), cell(e.Source));
+
+                    const input = document.createElement('input');
+                    input.type = 'number';
+                    input.step = '0.01';
+                    input.min = '1';
+                    input.max = '4';
+                    input.style.width = '5em';
+                    input.placeholder = 'e.g. 2.39';
+                    const set = document.createElement('button');
+                    set.textContent = 'Set';
+                    set.className = 'raised emby-button';
+                    set.addEventListener('click', async () => {
+                        const ratio = parseFloat(input.value);
+                        if (!(ratio >= 1 && ratio <= 4)) return;
+                        await api('PUT', 'TrueAspect/Ratios/' + e.ItemId, { Ratio: ratio });
+                        await load();
+                    });
+                    const overrideCell = document.createElement('td');
+                    overrideCell.style.textAlign = 'center';
+                    overrideCell.append(input, set);
+
+                    const rescan = document.createElement('button');
+                    rescan.textContent = 'Rescan';
+                    rescan.className = 'raised emby-button';
+                    rescan.addEventListener('click', async () => {
+                        await api('DELETE', 'TrueAspect/Ratios/' + e.ItemId);
+                        Dashboard.alert('Queued. The result appears in a few minutes.');
+                        await load();
+                    });
+                    const actionCell = document.createElement('td');
+                    actionCell.append(rescan);
+
+                    tr.append(overrideCell, actionCell);
+                    rows.append(tr);
+                }
+
+                const counts = entries.reduce((acc, e) => (acc[e.Source] = (acc[e.Source] || 0) + 1, acc), {});
+                page.querySelector('#Summary').textContent =
+                    `${entries.length} items · ` + Object.entries(counts).map(([k, v]) => `${v} ${k.toLowerCase()}`).join(', ') +
+                    (shown.length > 300 ? ` · showing first 300 of ${shown.length}` : '');
+            }
+
+            function updatePreview() {
+                const base = page.querySelector('#HomeAssistantUrl').value.trim().replace(/\/+$/, '');
+                const id = page.querySelector('#WebhookId').value.trim();
+                page.querySelector('#WebhookPreview').textContent =
+                    base && id ? `Posts to ${base}/api/webhook/${encodeURIComponent(id)}` : 'Set both fields to enable the webhook.';
+            }
+
+            async function load() {
+                entries = await api('GET', 'TrueAspect/Ratios');
+                render();
+            }
+
+            page.addEventListener('pageshow', async () => {
+                Dashboard.showLoadingMsg();
+                const config = await ApiClient.getPluginConfiguration(pluginId);
+                textFields.forEach(f => page.querySelector('#' + f).value = config[f] || '');
+                numberFields.forEach(f => page.querySelector('#' + f).value = config[f]);
+                checkFields.forEach(f => page.querySelector('#' + f).checked = !!config[f]);
+                updatePreview();
+                await load();
+                Dashboard.hideLoadingMsg();
+            });
+
+            page.querySelector('#TrueAspectConfigForm').addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                Dashboard.showLoadingMsg();
+                const config = await ApiClient.getPluginConfiguration(pluginId);
+                textFields.forEach(f => config[f] = page.querySelector('#' + f).value.trim());
+                numberFields.forEach(f => config[f] = Number(page.querySelector('#' + f).value));
+                checkFields.forEach(f => config[f] = page.querySelector('#' + f).checked);
+                const result = await ApiClient.updatePluginConfiguration(pluginId, config);
+                Dashboard.processPluginConfigurationUpdateResult(result);
+            });
+
+            page.querySelector('#TestWebhook').addEventListener('click', async () => {
+                try {
+                    await api('POST', 'TrueAspect/TestWebhook');
+                    Dashboard.alert('Test webhook sent.');
+                } catch (err) {
+                    Dashboard.alert('Test webhook failed. Save the Home Assistant URL and webhook ID first, then check the server log.');
+                }
+            });
+
+            page.querySelector('#RetryFailed').addEventListener('click', async () => {
+                await api('POST', 'TrueAspect/RetryFailed');
+                Dashboard.alert('Failed items cleared. Run the "Detect aspect ratios" task to scan them again.');
+                await load();
+            });
+
+            page.querySelector('#Filter').addEventListener('input', render);
+            textFields.forEach(f => page.querySelector('#' + f).addEventListener('input', updatePreview));
+        })();
+    </script>
+</div>
+</body>
+</html>

@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check tag matches build.yaml
+        id: meta
+        run: |
+          version="$(yq -r '.version' build.yaml)"
+          if [[ "${GITHUB_REF_NAME}" != "v${version}" ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match build.yaml version ${version} (expected v${version})"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install jprm
+        run: pip install jprm==1.1.0
+
+      - name: Build plugin
+        id: build
+        run: |
+          mkdir -p artifacts
+          zip="$(jprm plugin build . --output artifacts --version "${{ steps.meta.outputs.version }}" | tail -n 1)"
+          echo "zip=${zip}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          yq -r '.changelog' build.yaml > notes.md
+          gh release create "${GITHUB_REF_NAME}" "${{ steps.build.outputs.zip }}" \
+            --title "TrueAspect ${{ steps.meta.outputs.version }}" \
+            --notes-file notes.md
+
+      - uses: actions/checkout@v5
+        with:
+          ref: gh-pages
+          path: pages
+
+      - name: Update plugin repository manifest
+        run: |
+          zip="${{ steps.build.outputs.zip }}"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo_url="https://${owner}.github.io/${GITHUB_REPOSITORY#*/}"
+          zip_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/$(basename "$zip")"
+          jprm repo add --url "$repo_url" --plugin-url "$zip_url" pages/manifest.json "$zip"
+
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "TrueAspect ${{ steps.meta.outputs.version }}"
+          git push

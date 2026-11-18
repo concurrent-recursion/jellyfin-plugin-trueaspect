@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c2a6b"/>
+      <stop offset="0.55" stop-color="#7b3fe4"/>
+      <stop offset="1" stop-color="#ff8a3d"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffe29a"/>
+      <stop offset="1" stop-color="#ffb347"/>
+    </radialGradient>
+    <clipPath id="picture">
+      <rect x="80" y="126" width="1120" height="468"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1280" height="720" fill="#0d1117"/>
+  <rect x="80" y="45" width="1120" height="630" rx="10" fill="#000"/>
+
+  <g clip-path="url(#picture)">
+    <rect x="80" y="126" width="1120" height="468" fill="url(#sky)"/>
+    <circle cx="820" cy="470" r="110" fill="url(#sun)"/>
+    <polygon points="80,594 80,450 260,330 420,470 560,380 760,594" fill="#2a1d4f"/>
+    <polygon points="520,594 700,420 860,520 1000,360 1200,500 1200,594" fill="#3b2668"/>
+    <polygon points="80,594 80,540 300,480 520,560 760,500 1000,560 1200,520 1200,594" fill="#140f2b"/>
+  </g>
+
+  <g fill="none" stroke="#4fd1c5" stroke-width="8" stroke-linecap="square">
+    <path d="M84 190 V130 H144"/>
+    <path d="M1136 130 H1196 V190"/>
+    <path d="M84 530 V590 H144"/>
+    <path d="M1136 590 H1196 V530"/>
+  </g>
+
+  <text x="640" y="104" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-weight="bold" font-size="52" fill="#ffffff">TrueAspect</text>
+  <text x="640" y="649" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-weight="bold" font-size="40" letter-spacing="2" fill="#4fd1c5">2.39 : 1</text>
+</svg>
