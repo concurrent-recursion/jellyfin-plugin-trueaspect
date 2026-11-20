@@ -23,6 +23,8 @@ public sealed record PlaybackPayload(
     [property: JsonPropertyName("stream_ratio")] double? StreamRatio,
     [property: JsonPropertyName("session_id")] string? SessionId = null);
 
+public sealed record WebhookResponse(int StatusCode, string? ReasonPhrase, bool IsSuccess);
+
 public sealed partial class PlaybackNotifier : IHostedService
 {
     private readonly ISessionManager _sessionManager;
@@ -79,12 +81,12 @@ public sealed partial class PlaybackNotifier : IHostedService
             sessionId);
     }
 
-    public async Task<bool> SendAsync(PlaybackPayload payload, CancellationToken cancellationToken)
+    public async Task<WebhookResponse?> SendAsync(PlaybackPayload payload, CancellationToken cancellationToken)
     {
         var config = Plugin.Instance?.Configuration;
         if (config?.GetWebhookUrl() is not { } url)
         {
-            return false;
+            return null;
         }
 
         using var client = _httpClientFactory.CreateClient();
@@ -95,7 +97,7 @@ public sealed partial class PlaybackNotifier : IHostedService
             LogWebhookStatus((int)response.StatusCode, payload.Name);
         }
 
-        return response.IsSuccessStatusCode;
+        return new WebhookResponse((int)response.StatusCode, response.ReasonPhrase, response.IsSuccessStatusCode);
     }
 
     private async void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)

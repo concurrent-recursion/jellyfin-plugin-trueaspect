@@ -6,110 +6,229 @@
 </head>
 <body>
 <div id="TrueAspectConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
-     data-require="emby-input,emby-button,emby-checkbox,emby-textarea">
+     data-require="emby-input,emby-button,emby-checkbox,emby-select">
+    <style>
+        #TrueAspectConfigPage [hidden] { display: none !important; }
+        #TrueAspectConfigPage .ta-tabs { display: flex; gap: .25em; border-bottom: 1px solid rgba(128, 128, 128, .25); margin: 0 0 1.5em; }
+        #TrueAspectConfigPage .ta-tab { background: none; border: 0; border-bottom: 3px solid transparent; color: inherit; font: inherit; font-size: 1.05em; padding: .65em 1.2em; margin-bottom: -1px; cursor: pointer; opacity: .65; }
+        #TrueAspectConfigPage .ta-tab:hover { opacity: .9; }
+        #TrueAspectConfigPage .ta-tab[aria-selected="true"] { opacity: 1; border-bottom-color: #00a4dc; }
+        #TrueAspectConfigPage .ta-card { background: rgba(128, 128, 128, .07); border: 1px solid rgba(128, 128, 128, .2); border-radius: 10px; padding: 1.25em 1.5em .5em; margin-bottom: 1.5em; }
+        #TrueAspectConfigPage .ta-card-header { margin-bottom: 1.25em; padding-bottom: .9em; border-bottom: 1px solid rgba(128, 128, 128, .2); }
+        #TrueAspectConfigPage .ta-card-header h3 { margin: 0; font-size: 1.3em; font-weight: 500; }
+        #TrueAspectConfigPage .ta-card-header p, #TrueAspectConfigPage .ta-card-header .ta-desc { display: block; margin: .3em 0 0; font-size: .9em; opacity: .7; }
+        #TrueAspectConfigPage details.ta-card > summary { list-style: none; cursor: pointer; }
+        #TrueAspectConfigPage details.ta-card > summary::-webkit-details-marker { display: none; }
+        #TrueAspectConfigPage details.ta-card:not([open]) { padding-bottom: 0; }
+        #TrueAspectConfigPage details.ta-card:not([open]) .ta-card-header { border-bottom: 0; }
+        #TrueAspectConfigPage .ta-chevron { display: inline-block; margin-right: .4em; transition: transform .15s ease-out; }
+        #TrueAspectConfigPage details[open] .ta-chevron { transform: rotate(90deg); }
+        #TrueAspectConfigPage .ta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18em, 1fr)); column-gap: 2em; }
+        #TrueAspectConfigPage .ta-subhead { font-size: .8em; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; opacity: .6; margin: .25em 0 1em; }
+        #TrueAspectConfigPage .ta-devices { margin: -.75em 0 1.5em 2.6em; }
+        #TrueAspectConfigPage .ta-devices .checkboxContainer { margin-bottom: .35em; }
+        #TrueAspectConfigPage .ta-actions { display: flex; gap: 1em; flex-wrap: wrap; }
+        #TrueAspectConfigPage .ta-actions .emby-button { margin: 0; }
+        #TrueAspectConfigPage .ta-toolbar { display: flex; gap: 1.5em; align-items: flex-end; flex-wrap: wrap; }
+        #TrueAspectConfigPage .ta-toolbar .inputContainer, #TrueAspectConfigPage .ta-toolbar .selectContainer { margin-bottom: 0; }
+        #TrueAspectConfigPage .ta-summary { display: flex; gap: 1em; align-items: center; flex-wrap: wrap; margin: 1em 0; }
+        #TrueAspectConfigPage .ta-table-wrap { overflow-x: auto; }
+        #TrueAspectConfigPage .ta-table { width: 100%; border-collapse: collapse; }
+        #TrueAspectConfigPage .ta-table th { text-align: left; font-size: .8em; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; opacity: .65; padding: .6em .75em; border-bottom: 1px solid rgba(128, 128, 128, .35); }
+        #TrueAspectConfigPage .ta-table td { padding: .4em .75em; border-bottom: 1px solid rgba(128, 128, 128, .12); }
+        #TrueAspectConfigPage .ta-table tbody tr:hover { background: rgba(128, 128, 128, .08); }
+        #TrueAspectConfigPage .ta-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+        #TrueAspectConfigPage .ta-table .actions { text-align: right; white-space: nowrap; }
+        #TrueAspectConfigPage .ta-badge { display: inline-block; padding: .15em .7em; border-radius: 999px; font-size: .8em; background: rgba(128, 128, 128, .22); }
+        #TrueAspectConfigPage .ta-badge.cropdetect { background: rgba(0, 164, 220, .22); }
+        #TrueAspectConfigPage .ta-badge.manual { background: rgba(82, 181, 75, .28); }
+        #TrueAspectConfigPage .ta-badge.failed { background: rgba(220, 60, 60, .3); }
+        #TrueAspectConfigPage .ta-ratio-input { width: 5.5em; padding: .35em .5em; border: 1px solid rgba(128, 128, 128, .35); border-radius: 4px; background: rgba(128, 128, 128, .15); color: inherit; font: inherit; font-size: .9em; }
+        #TrueAspectConfigPage .ta-small { padding: .35em .9em !important; margin: 0 0 0 .4em !important; font-size: .85em; }
+        #TrueAspectConfigPage .ta-more { margin: 1em auto 1.5em; display: block; }
+        #TrueAspectConfigPage .ta-legend { display: grid; grid-template-columns: auto 1fr; gap: .5em 1em; align-items: baseline; margin: .9em 0 0; font-size: .9em; }
+        #TrueAspectConfigPage .ta-legend dt { margin: 0; }
+        #TrueAspectConfigPage .ta-legend dd { margin: 0; opacity: .8; }
+        #TrueAspectConfigPage .ta-empty td { text-align: center; padding: 2em; opacity: .7; }
+    </style>
+
     <div data-role="content">
         <div class="content-primary">
             <h2 class="sectionTitle">TrueAspect</h2>
 
-            <form id="TrueAspectConfigForm">
-                <div class="verticalSection">
-                    <h3 class="sectionTitle">Home Assistant</h3>
+            <div class="ta-tabs" role="tablist">
+                <button type="button" class="ta-tab" role="tab" data-tab="settings" aria-selected="true">Settings</button>
+                <button type="button" class="ta-tab" role="tab" data-tab="ratios" aria-selected="false" id="RatiosTab">Detected ratios</button>
+            </div>
+
+            <form id="TrueAspectConfigForm" data-panel="settings">
+                <section class="ta-card">
+                    <div class="ta-card-header">
+                        <h3>Home Assistant</h3>
+                        <p>Where playback starts are posted.</p>
+                    </div>
                     <div class="inputContainer">
                         <input is="emby-input" type="url" id="HomeAssistantUrl" label="Home Assistant URL" placeholder="http://host.docker.internal:8123" />
                         <div class="fieldDescription">Base address of Home Assistant as seen from the Jellyfin server. Use host.docker.internal when Jellyfin runs in Docker on the same host.</div>
                     </div>
                     <div class="inputContainer">
                         <input is="emby-input" type="text" id="WebhookId" label="Webhook ID" />
-                        <div class="fieldDescription">The webhook_id of the Home Assistant automation trigger. Every playback start on an allowed device is posted with its device name, item and aspect ratio.</div>
+                        <div class="fieldDescription">The webhook_id of the Home Assistant automation trigger. Each playback start is posted with its device name, item and aspect ratio.</div>
+                        <div class="fieldDescription" id="WebhookPreview" style="margin-top:.5em"></div>
                     </div>
-                    <div class="fieldDescription" id="WebhookPreview"></div>
-                    <div class="inputContainer">
-                        <textarea is="emby-textarea" id="AllowedDevices" label="Allowed devices" rows="4"></textarea>
-                        <div class="fieldDescription">One device name per line, matched without regard to case. Only playback on these devices is posted. Leave empty to post every device.</div>
-                        <div id="KnownDevices" style="display:flex;gap:.5em;flex-wrap:wrap;align-items:center;margin-top:.5em"></div>
-                    </div>
-                </div>
 
-                <div class="verticalSection">
-                    <h3 class="sectionTitle">Detection</h3>
-                    <label class="checkboxContainer">
-                        <input is="emby-checkbox" type="checkbox" id="ScanMovies" />
-                        <span>Scan movies</span>
-                    </label>
-                    <label class="checkboxContainer">
-                        <input is="emby-checkbox" type="checkbox" id="ScanEpisodes" />
-                        <span>Scan TV episodes</span>
-                    </label>
-                    <label class="checkboxContainer">
-                        <input is="emby-checkbox" type="checkbox" id="ScanOnItemAdded" />
-                        <span>Scan new items as they are added</span>
-                    </label>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="SampleCount" min="3" max="60" label="Samples per item" />
-                        <div class="fieldDescription">Points through the video where cropdetect runs. More samples take longer but are harder to fool with dark scenes.</div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label>
+                            <input is="emby-checkbox" type="checkbox" id="LimitDevices" />
+                            <span>Only post for selected devices</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">When off, playback on every device is posted and the automation decides what to ignore.</div>
                     </div>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="MaxConcurrentScans" min="1" max="8" label="Scans at once" />
-                        <div class="fieldDescription">How many items are scanned in parallel. Each scan runs its own ffmpeg process.</div>
+                    <div id="DevicePicker" class="ta-devices" hidden>
+                        <div id="DeviceList" class="ta-grid" style="grid-template-columns:repeat(auto-fill,minmax(13em,1fr));column-gap:1.5em"></div>
+                        <div style="display:flex;gap:.75em;align-items:flex-end;margin-top:.75em;max-width:30em">
+                            <div class="inputContainer" style="flex:1;margin-bottom:0">
+                                <input is="emby-input" type="text" id="NewDevice" label="Add a device by name" />
+                            </div>
+                            <button is="emby-button" type="button" id="AddDevice" class="raised emby-button" style="margin:0"><span>Add</span></button>
+                        </div>
+                        <div class="fieldDescription" style="margin-top:.5em">Devices appear in the list once they have connected to Jellyfin. Names are matched without regard to case.</div>
                     </div>
-                </div>
+                </section>
 
-                <details class="verticalSection">
-                    <summary style="cursor:pointer"><h3 class="sectionTitle" style="display:inline-block">Advanced</h3></summary>
-                    <p class="fieldDescription">Changes here only affect items scanned afterwards. Rescan an item to apply them to it.</p>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="FramesPerSample" min="2" max="60" label="Frames per sample" />
-                        <div class="fieldDescription">Frames cropdetect reads at each sample point.</div>
+                <section class="ta-card">
+                    <div class="ta-card-header">
+                        <h3>Detection</h3>
+                        <p>What gets scanned and how hard the server works at it.</p>
                     </div>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="BlackLimit" min="0.01" max="0.5" step="0.01" label="Black threshold" />
-                        <div class="fieldDescription">cropdetect limit as a fraction of full range. Raise it if dark bars are not being detected.</div>
+                    <div class="ta-grid" style="margin-bottom:.5em">
+                        <label class="checkboxContainer">
+                            <input is="emby-checkbox" type="checkbox" id="ScanMovies" />
+                            <span>Scan movies</span>
+                        </label>
+                        <label class="checkboxContainer">
+                            <input is="emby-checkbox" type="checkbox" id="ScanEpisodes" />
+                            <span>Scan TV episodes</span>
+                        </label>
+                        <label class="checkboxContainer">
+                            <input is="emby-checkbox" type="checkbox" id="ScanOnItemAdded" />
+                            <span>Scan new items as they are added</span>
+                        </label>
                     </div>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="AlreadyCroppedRatio" min="1.8" max="4" step="0.01" label="Already cropped above" />
-                        <div class="fieldDescription">Files whose own aspect ratio is at least this wide are taken at face value and not scanned. Set it to 4 to always run cropdetect.</div>
+                    <div class="ta-grid">
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="SampleCount" min="3" max="60" label="Samples per item" />
+                            <div class="fieldDescription">Points through the video where cropdetect runs. More samples take longer but are harder to fool with dark scenes.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="MaxConcurrentScans" min="1" max="8" label="Scans at once" />
+                            <div class="fieldDescription">How many items are scanned in parallel. Each scan runs its own ffmpeg process.</div>
+                        </div>
                     </div>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="SkipStartPercent" min="0" max="40" step="0.5" label="Skip at start (%)" />
-                        <div class="fieldDescription">Part of the runtime at the start that is never sampled, to stay clear of logos and opening titles.</div>
+                </section>
+
+                <details class="ta-card">
+                    <summary class="ta-card-header">
+                        <h3><span class="ta-chevron">&rsaquo;</span>Advanced</h3>
+                        <span class="ta-desc">Tuning for unusual files and slow storage. Changes only affect items scanned afterwards.</span>
+                    </summary>
+
+                    <div class="ta-subhead">Cropdetect</div>
+                    <div class="ta-grid">
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="FramesPerSample" min="2" max="60" label="Frames per sample" />
+                            <div class="fieldDescription">Frames cropdetect reads at each sample point.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="BlackLimit" min="0.01" max="0.5" step="0.01" label="Black threshold" />
+                            <div class="fieldDescription">cropdetect limit as a fraction of full range. Raise it if dark bars are not being detected.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="AlreadyCroppedRatio" min="1.8" max="4" step="0.01" label="Already cropped above" />
+                            <div class="fieldDescription">Files at least this wide are taken at face value and not scanned. Set it to 4 to always run cropdetect.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="SkipStartPercent" min="0" max="40" step="0.5" label="Skip at start (%)" />
+                            <div class="fieldDescription">Runtime at the start that is never sampled, to stay clear of logos and opening titles.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="SkipEndPercent" min="0" max="40" step="0.5" label="Skip at end (%)" />
+                            <div class="fieldDescription">Runtime at the end that is never sampled. Raise it for long credits framed differently from the film.</div>
+                        </div>
                     </div>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="SkipEndPercent" min="0" max="40" step="0.5" label="Skip at end (%)" />
-                        <div class="fieldDescription">Part of the runtime at the end that is never sampled. Raise it for films with long credits framed differently from the film.</div>
-                    </div>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="QueueDelaySeconds" min="0" max="3600" label="Delay before queued scans (seconds)" />
-                        <div class="fieldDescription">Wait before scanning a new, rescanned or unscanned played item, so Jellyfin can finish reading its metadata first. Raise it if new items fall back to the stream ratio.</div>
-                    </div>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="FfmpegTimeoutSeconds" min="10" max="1800" label="ffmpeg timeout (seconds)" />
-                        <div class="fieldDescription">Longest a single ffprobe or ffmpeg sample may run before it is dropped. Raise it for large files on slow network storage.</div>
-                    </div>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="WebhookTimeoutSeconds" min="1" max="60" label="Webhook timeout (seconds)" />
+
+                    <div class="ta-subhead">Timing</div>
+                    <div class="ta-grid">
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="QueueDelaySeconds" min="0" max="3600" label="Delay before queued scans (seconds)" />
+                            <div class="fieldDescription">Gives Jellyfin time to read a new item's metadata first. Raise it if new items fall back to the stream ratio.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="FfmpegTimeoutSeconds" min="10" max="1800" label="ffmpeg timeout (seconds)" />
+                            <div class="fieldDescription">Longest a single ffprobe or ffmpeg sample may run. Raise it for large files on slow network storage.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="WebhookTimeoutSeconds" min="1" max="60" label="Webhook timeout (seconds)" />
+                            <div class="fieldDescription">How long to wait for Home Assistant to answer.</div>
+                        </div>
                     </div>
                 </details>
 
-                <div>
-                    <button is="emby-button" type="submit" class="raised button-submit block emby-button"><span>Save</span></button>
-                    <button is="emby-button" type="button" id="TestWebhook" class="raised block emby-button"><span>Send test webhook</span></button>
+                <div class="ta-actions">
+                    <button is="emby-button" type="submit" class="raised button-submit emby-button"><span>Save</span></button>
+                    <button is="emby-button" type="button" id="TestWebhook" class="raised emby-button"><span>Send test webhook</span></button>
                 </div>
             </form>
 
-            <div class="verticalSection" style="margin-top:2em">
-                <h3 class="sectionTitle">Detected ratios</h3>
-                <div style="display:flex;gap:1em;align-items:center;flex-wrap:wrap">
-                    <input is="emby-input" type="search" id="Filter" label="Filter" style="min-width:16em" />
-                    <span id="Summary"></span>
-                    <button is="emby-button" type="button" id="RetryFailed" class="raised emby-button"><span>Retry failed</span></button>
-                </div>
-                <p class="fieldDescription">New scans run from Dashboard &rsaquo; Scheduled Tasks &rsaquo; Detect aspect ratios, and automatically for new items. Setting a ratio by hand marks it manual so it is never rescanned.</p>
-                <table class="detailTable" style="width:100%">
-                    <thead>
-                    <tr><th style="text-align:left">Title</th><th>Ratio</th><th>Source</th><th>Override</th><th></th></tr>
-                    </thead>
-                    <tbody id="RatioRows"></tbody>
-                </table>
+            <div data-panel="ratios" hidden>
+                <section class="ta-card">
+                    <div class="ta-card-header">
+                        <h3>Detected ratios</h3>
+                        <p>New scans run from Dashboard &rsaquo; Scheduled Tasks &rsaquo; Detect aspect ratios, and automatically for new items.</p>
+                        <dl class="ta-legend">
+                            <dt><span class="ta-badge cropdetect">Cropdetect</span></dt>
+                            <dd>Measured with ffmpeg cropdetect at several points through the video, with any black bars baked into the frame removed.</dd>
+                            <dt><span class="ta-badge stream">Stream</span></dt>
+                            <dd>The file's own aspect ratio. Used without scanning when the file is already at least as wide as the "Already cropped above" setting.</dd>
+                            <dt><span class="ta-badge manual">Manual</span></dt>
+                            <dd>Set by hand with Override. Never rescanned or replaced automatically.</dd>
+                            <dt><span class="ta-badge failed">Failed</span></dt>
+                            <dd>No usable result, because the file had no readable duration or too few cropdetect samples succeeded. Retry or rescan it once the cause is fixed.</dd>
+                        </dl>
+                    </div>
+                    <div class="ta-toolbar">
+                        <div class="inputContainer" style="flex:1;min-width:14em;max-width:28em">
+                            <input is="emby-input" type="search" id="Filter" label="Search by title or ratio" />
+                        </div>
+                        <div class="selectContainer" style="min-width:12em">
+                            <select is="emby-select" id="LibraryFilter" label="Library">
+                                <option value="">All</option>
+                            </select>
+                        </div>
+                        <div class="selectContainer" style="min-width:12em">
+                            <select is="emby-select" id="SourceFilter" label="Source">
+                                <option value="">All</option>
+                                <option value="Cropdetect">Cropdetect</option>
+                                <option value="Stream">Stream</option>
+                                <option value="Manual">Manual</option>
+                                <option value="Failed">Failed</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="ta-summary">
+                        <span id="Summary"></span>
+                        <button is="emby-button" type="button" id="RetryFailed" class="raised emby-button ta-small" style="margin:0 !important" hidden><span id="RetryFailedLabel">Retry failed</span></button>
+                    </div>
+                    <div class="ta-table-wrap">
+                        <table class="ta-table">
+                            <thead>
+                            <tr><th>Title</th><th class="num">Ratio</th><th>Source</th><th class="actions">Override</th></tr>
+                            </thead>
+                            <tbody id="RatioRows"></tbody>
+                        </table>
+                    </div>
+                    <button is="emby-button" type="button" id="ShowMore" class="raised emby-button ta-more" hidden><span id="ShowMoreLabel">Show more</span></button>
+                </section>
             </div>
         </div>
     </div>
@@ -117,12 +236,14 @@
     <script type="text/javascript">
         (function () {
             const pluginId = 'b3512314-ef01-4cde-8b1b-71b3ef6046a0';
+            const pageSize = 300;
             const page = document.querySelector('#TrueAspectConfigPage');
             const textFields = ['HomeAssistantUrl', 'WebhookId'];
             const numberFields = ['SampleCount', 'MaxConcurrentScans', 'FramesPerSample', 'BlackLimit', 'AlreadyCroppedRatio',
                 'SkipStartPercent', 'SkipEndPercent', 'QueueDelaySeconds', 'FfmpegTimeoutSeconds', 'WebhookTimeoutSeconds'];
             const checkFields = ['ScanMovies', 'ScanEpisodes', 'ScanOnItemAdded'];
             let entries = [];
+            let limit = pageSize;
 
             const api = (method, path, body) => ApiClient.ajax({
                 type: method,
@@ -132,108 +253,179 @@
                 dataType: method === 'GET' || method === 'PUT' || path.startsWith('TrueAspect/TestWebhook') ? 'json' : undefined
             });
 
-            function cell(text) {
+            function showTab(name) {
+                page.querySelectorAll('.ta-tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+                page.querySelectorAll('[data-panel]').forEach(p => p.hidden = p.dataset.panel !== name);
+            }
+
+            function cell(content, className) {
                 const td = document.createElement('td');
-                td.textContent = text;
-                td.style.textAlign = 'center';
+                if (className) td.className = className;
+                td.append(content);
                 return td;
+            }
+
+            function smallButton(text, onClick) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = text;
+                button.className = 'raised emby-button ta-small';
+                button.addEventListener('click', onClick);
+                return button;
+            }
+
+            function row(e) {
+                const badge = document.createElement('span');
+                badge.className = 'ta-badge ' + e.Source.toLowerCase();
+                badge.textContent = e.Source;
+
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.step = '0.01';
+                input.min = '1';
+                input.max = '4';
+                input.placeholder = '2.39';
+                input.className = 'ta-ratio-input';
+                const setRatio = async () => {
+                    const ratio = parseFloat(input.value);
+                    if (!(ratio >= 1 && ratio <= 4)) {
+                        Dashboard.alert('Enter a ratio between 1 and 4, such as 2.39.');
+                        return;
+                    }
+                    await api('PUT', 'TrueAspect/Ratios/' + e.ItemId, { Ratio: ratio });
+                    await load();
+                };
+                input.addEventListener('keydown', ev => {
+                    if (ev.key === 'Enter') {
+                        ev.preventDefault();
+                        setRatio();
+                    }
+                });
+
+                const actions = document.createElement('span');
+                actions.append(
+                    input,
+                    smallButton('Set', setRatio),
+                    smallButton('Rescan', async () => {
+                        await api('DELETE', 'TrueAspect/Ratios/' + e.ItemId);
+                        Dashboard.alert('Queued for rescan. It reappears here once the scan finishes.');
+                        await load();
+                    }));
+
+                const tr = document.createElement('tr');
+                tr.append(
+                    cell(e.Name),
+                    cell(e.Ratio == null ? '—' : e.Ratio.toFixed(2), 'num'),
+                    cell(badge),
+                    cell(actions, 'actions'));
+                return tr;
+            }
+
+            const noLibrary = '__none__';
+
+            function renderLibraries() {
+                const select = page.querySelector('#LibraryFilter');
+                const current = select.value;
+                const names = [...new Set(entries.map(e => e.Library).filter(n => n))]
+                    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+                const options = [['', 'All'], ...names.map(n => [n, n])];
+                if (entries.some(e => !e.Library)) options.push([noLibrary, 'Not in a library']);
+                select.replaceChildren(...options.map(([value, label]) => new Option(label, value)));
+                select.value = options.some(([value]) => value === current) ? current : '';
             }
 
             function render() {
                 const filter = page.querySelector('#Filter').value.trim().toLowerCase();
+                const library = page.querySelector('#LibraryFilter').value;
+                const source = page.querySelector('#SourceFilter').value;
+                const shown = entries.filter(e =>
+                    (!source || e.Source === source)
+                    && (!library || (library === noLibrary ? !e.Library : e.Library === library))
+                    && (!filter || e.Name.toLowerCase().includes(filter) || (e.Ratio != null && e.Ratio.toFixed(2).startsWith(filter))));
+
                 const rows = page.querySelector('#RatioRows');
-                rows.replaceChildren();
-                const shown = entries.filter(e => !filter || e.Name.toLowerCase().includes(filter) || String(e.Ratio).startsWith(filter) || e.Source.toLowerCase() === filter);
-                for (const e of shown.slice(0, 300)) {
-                    const tr = document.createElement('tr');
-                    const name = cell(e.Name);
-                    name.style.textAlign = 'left';
-                    tr.append(name, cell(e.Ratio == null ? '—' : e.Ratio.toFixed(2)), cell(e.Source));
-
-                    const input = document.createElement('input');
-                    input.type = 'number';
-                    input.step = '0.01';
-                    input.min = '1';
-                    input.max = '4';
-                    input.style.width = '5em';
-                    input.placeholder = 'e.g. 2.39';
-                    const set = document.createElement('button');
-                    set.textContent = 'Set';
-                    set.className = 'raised emby-button';
-                    set.addEventListener('click', async () => {
-                        const ratio = parseFloat(input.value);
-                        if (!(ratio >= 1 && ratio <= 4)) return;
-                        await api('PUT', 'TrueAspect/Ratios/' + e.ItemId, { Ratio: ratio });
-                        await load();
-                    });
-                    const overrideCell = document.createElement('td');
-                    overrideCell.style.textAlign = 'center';
-                    overrideCell.append(input, set);
-
-                    const rescan = document.createElement('button');
-                    rescan.textContent = 'Rescan';
-                    rescan.className = 'raised emby-button';
-                    rescan.addEventListener('click', async () => {
-                        await api('DELETE', 'TrueAspect/Ratios/' + e.ItemId);
-                        Dashboard.alert('Queued. The result appears in a few minutes.');
-                        await load();
-                    });
-                    const actionCell = document.createElement('td');
-                    actionCell.append(rescan);
-
-                    tr.append(overrideCell, actionCell);
-                    rows.append(tr);
+                if (shown.length) {
+                    rows.replaceChildren(...shown.slice(0, limit).map(row));
+                } else {
+                    const empty = document.createElement('tr');
+                    empty.className = 'ta-empty';
+                    const td = document.createElement('td');
+                    td.colSpan = 4;
+                    td.textContent = entries.length ? 'No items match these filters.' : 'Nothing has been scanned yet.';
+                    empty.append(td);
+                    rows.replaceChildren(empty);
                 }
 
                 const counts = entries.reduce((acc, e) => (acc[e.Source] = (acc[e.Source] || 0) + 1, acc), {});
+                const total = shown.length === entries.length ? entries.length + ' items' : shown.length + ' of ' + entries.length + ' items';
                 page.querySelector('#Summary').textContent =
-                    `${entries.length} items · ` + Object.entries(counts).map(([k, v]) => `${v} ${k.toLowerCase()}`).join(', ') +
-                    (shown.length > 300 ? ` · showing first 300 of ${shown.length}` : '');
+                    [total, ...Object.entries(counts).map(([k, v]) => v + ' ' + k.toLowerCase())].join(' · ');
+
+                const failed = counts.Failed || 0;
+                page.querySelector('#RetryFailed').hidden = failed === 0;
+                page.querySelector('#RetryFailedLabel').textContent = 'Retry ' + failed + ' failed';
+
+                const remaining = Math.max(0, shown.length - limit);
+                page.querySelector('#ShowMore').hidden = remaining === 0;
+                page.querySelector('#ShowMoreLabel').textContent = 'Show ' + Math.min(pageSize, remaining) + ' more of ' + remaining;
+
+                page.querySelector('#RatiosTab').textContent = 'Detected ratios (' + entries.length + ')';
             }
 
             function updatePreview() {
                 const base = page.querySelector('#HomeAssistantUrl').value.trim().replace(/\/+$/, '');
                 const id = page.querySelector('#WebhookId').value.trim();
-                page.querySelector('#WebhookPreview').textContent =
-                    base && id ? `Posts to ${base}/api/webhook/${encodeURIComponent(id)}` : 'Set both fields to enable the webhook.';
+                const preview = page.querySelector('#WebhookPreview');
+                preview.replaceChildren();
+                if (base && id) {
+                    const url = document.createElement('code');
+                    url.textContent = base + '/api/webhook/' + encodeURIComponent(id);
+                    preview.append('Posts to ', url);
+                } else {
+                    preview.textContent = 'Set both fields to enable the webhook.';
+                }
             }
 
-            function allowedDevices() {
-                return page.querySelector('#AllowedDevices').value.split('\n').map(d => d.trim()).filter(d => d);
+            const escapeHtml = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+            let knownDevices = [];
+            let selectedDevices = [];
+
+            const hasDevice = (list, name) => list.some(d => d.toLowerCase() === name.toLowerCase());
+
+            function renderDevices() {
+                const names = [...knownDevices];
+                selectedDevices.forEach(d => { if (!hasDevice(names, d)) names.push(d); });
+                names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+                const list = page.querySelector('#DeviceList');
+                list.innerHTML = names.map((name, i) =>
+                    '<label class="checkboxContainer">' +
+                    '<input is="emby-checkbox" type="checkbox" data-index="' + i + '"' + (hasDevice(selectedDevices, name) ? ' checked' : '') + ' />' +
+                    '<span>' + escapeHtml(name) + '</span></label>').join('');
+                list.querySelectorAll('input').forEach(input => input.addEventListener('change', () => {
+                    const name = names[Number(input.dataset.index)];
+                    selectedDevices = input.checked
+                        ? [...selectedDevices, name]
+                        : selectedDevices.filter(d => d.toLowerCase() !== name.toLowerCase());
+                }));
+            }
+
+            function updateDevicePicker() {
+                page.querySelector('#DevicePicker').hidden = !page.querySelector('#LimitDevices').checked;
             }
 
             async function loadKnownDevices() {
-                const container = page.querySelector('#KnownDevices');
-                container.replaceChildren();
-                let devices = [];
                 try {
                     const result = await ApiClient.getJSON(ApiClient.getUrl('Devices'));
-                    devices = [...new Set((result.Items || []).map(d => d.CustomName || d.Name).filter(n => n))].sort();
+                    knownDevices = [...new Set((result.Items || []).map(d => d.CustomName || d.Name).filter(n => n))];
                 } catch (err) {
-                    return;
+                    knownDevices = [];
                 }
-                if (!devices.length) return;
-                const label = document.createElement('span');
-                label.className = 'fieldDescription';
-                label.textContent = 'Add a known device:';
-                container.append(label);
-                for (const name of devices) {
-                    const add = document.createElement('button');
-                    add.type = 'button';
-                    add.textContent = name;
-                    add.className = 'raised emby-button';
-                    add.addEventListener('click', () => {
-                        const current = allowedDevices();
-                        if (!current.some(d => d.toLowerCase() === name.toLowerCase())) {
-                            page.querySelector('#AllowedDevices').value = [...current, name].join('\n');
-                        }
-                    });
-                    container.append(add);
-                }
+                renderDevices();
             }
 
             async function load() {
                 entries = await api('GET', 'TrueAspect/Ratios');
+                renderLibraries();
                 render();
             }
 
@@ -244,7 +436,9 @@
                     textFields.forEach(f => page.querySelector('#' + f).value = config[f] || '');
                     numberFields.forEach(f => page.querySelector('#' + f).value = config[f]);
                     checkFields.forEach(f => page.querySelector('#' + f).checked = !!config[f]);
-                    page.querySelector('#AllowedDevices').value = (config.AllowedDevices || []).join('\n');
+                    selectedDevices = config.AllowedDevices || [];
+                    page.querySelector('#LimitDevices').checked = selectedDevices.length > 0;
+                    updateDevicePicker();
                     updatePreview();
                     await Promise.all([load(), loadKnownDevices()]);
                 } finally {
@@ -254,13 +448,18 @@
 
             page.querySelector('#TrueAspectConfigForm').addEventListener('submit', async (ev) => {
                 ev.preventDefault();
+                const limitDevices = page.querySelector('#LimitDevices').checked;
+                if (limitDevices && !selectedDevices.length) {
+                    Dashboard.alert('Select at least one device, or turn off "Only post for selected devices".');
+                    return;
+                }
                 Dashboard.showLoadingMsg();
                 try {
                     const config = await ApiClient.getPluginConfiguration(pluginId);
                     textFields.forEach(f => config[f] = page.querySelector('#' + f).value.trim());
                     numberFields.forEach(f => config[f] = Number(page.querySelector('#' + f).value));
                     checkFields.forEach(f => config[f] = page.querySelector('#' + f).checked);
-                    config.AllowedDevices = allowedDevices();
+                    config.AllowedDevices = limitDevices ? selectedDevices : [];
                     const result = await ApiClient.updatePluginConfiguration(pluginId, config);
                     Dashboard.processPluginConfigurationUpdateResult(result);
                 } catch (err) {
@@ -270,11 +469,21 @@
             });
 
             page.querySelector('#TestWebhook').addEventListener('click', async () => {
+                const button = page.querySelector('#TestWebhook');
+                button.disabled = true;
                 try {
-                    await api('POST', 'TrueAspect/TestWebhook');
-                    Dashboard.alert('Test webhook sent.');
+                    const result = await api('POST', 'TrueAspect/TestWebhook');
+                    Dashboard.alert({
+                        title: result.Success ? 'Test webhook sent' : 'Test webhook failed',
+                        message: result.Message
+                    });
                 } catch (err) {
-                    Dashboard.alert('Test webhook failed. Save the Home Assistant URL and webhook ID first, then check the server log.');
+                    Dashboard.alert({
+                        title: 'Test webhook failed',
+                        message: 'The Jellyfin server did not answer' + (err && err.status ? ' (' + err.status + ')' : '') + '.'
+                    });
+                } finally {
+                    button.disabled = false;
                 }
             });
 
@@ -284,7 +493,40 @@
                 await load();
             });
 
-            page.querySelector('#Filter').addEventListener('input', render);
+            page.querySelector('#ShowMore').addEventListener('click', () => {
+                limit += pageSize;
+                render();
+            });
+
+            const resetAndRender = () => {
+                limit = pageSize;
+                render();
+            };
+            page.querySelector('#Filter').addEventListener('input', resetAndRender);
+            page.querySelector('#SourceFilter').addEventListener('change', resetAndRender);
+            page.querySelector('#LibraryFilter').addEventListener('change', resetAndRender);
+
+            page.querySelectorAll('.ta-tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
+
+            page.querySelector('#LimitDevices').addEventListener('change', updateDevicePicker);
+
+            const addDevice = () => {
+                const input = page.querySelector('#NewDevice');
+                const name = input.value.trim();
+                if (name && !hasDevice(selectedDevices, name)) {
+                    selectedDevices = [...selectedDevices, name];
+                    renderDevices();
+                }
+                input.value = '';
+            };
+            page.querySelector('#AddDevice').addEventListener('click', addDevice);
+            page.querySelector('#NewDevice').addEventListener('keydown', ev => {
+                if (ev.key === 'Enter') {
+                    ev.preventDefault();
+                    addDevice();
+                }
+            });
+
             textFields.forEach(f => page.querySelector('#' + f).addEventListener('input', updatePreview));
         })();
     </script>

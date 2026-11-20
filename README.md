@@ -1,10 +1,18 @@
 # TrueAspect
 
-A Jellyfin plugin that works out the real picture aspect ratio of your movies and tells something else about it when playback starts. It was built to drive projector lens memories from Home Assistant, but the webhook is generic.
+A Jellyfin plugin that works out the real picture aspect ratio of your movies and tells Home Assistant about it when playback starts, so your projector can switch to the right lens memory on its own.
 
-The file's own aspect ratio isn't good enough for that. A 2.39:1 film on a UHD disc is stored as a 3840x2160 frame with black bars baked in, so Jellyfin reports it as 16:9. TrueAspect runs ffmpeg's `cropdetect` at a dozen points through each movie and takes the median, which shrugs off dark scenes and the occasional IMAX shot. Files already cropped wider than 2:1 are taken at face value.
+## Why this exists
+
+A constant image height setup is lovely right up until you have to use it. With a 2.40:1 scope screen, every movie needs its own zoom: scope films fill the screen edge to edge, while flat 1.85 and 16:9 films sit in the middle at the same height. Get it wrong and the picture either spills off the sides of the screen or sits there letterboxed, with a fat black frame all the way round.
+
+The hard part is knowing which one you've got. Jellyfin can't tell you, because almost every scope film is stored as a 16:9 frame with the black bars baked in, so it looks the same as everything else. The ratio on the box or on IMDb isn't reliable either. Remasters get reframed, some films switch ratios for IMAX scenes, and plenty of 2.20 and 2.00 releases don't fit any neat category. So movie night goes like this: press play, squint at the picture, find the projector remote, cycle through lens memories until the bars disappear, and get the family settled again.
+
+TrueAspect does that for you. It measures the real ratio of every movie ahead of time. When anyone presses play, it tells Home Assistant that something is playing, on which device, and how wide the picture actually is. An automation picks the matching lens memory, and the lens is usually in place before the studio logo is over.
 
 ## What it does
+
+A 2.39:1 film on a UHD disc is stored as a 3840x2160 frame with black bars baked in, so Jellyfin reports it as 16:9. TrueAspect runs ffmpeg's `cropdetect` at a dozen points through each movie and combines the results, which shrugs off dark scenes and the occasional IMAX shot. Files already wider than 2:1 are taken at face value (the threshold is configurable).
 
 - **Detects** ratios with Jellyfin's bundled ffmpeg, either from the *Detect aspect ratios* scheduled task (daily at 03:00 by default) or automatically a couple of minutes after a new item is added.
 - **Stores** results in `<jellyfin data>/trueaspect/ratios.json` (`/config/data/trueaspect/ratios.json` in the official Docker image). That sits outside the versioned plugin folder so upgrades keep it, and metadata refreshes, NFO rewrites and tag changes never touch it.
@@ -15,7 +23,7 @@ The file's own aspect ratio isn't good enough for that. A 2.39:1 film on a UHD d
   "event": "PlaybackStart",
   "device": "Home Theater",
   "client": "Jellyfin Android TV",
-  "user": "brad",
+  "user": "jimothy",
   "item_id": "3f9c0d6e5a2b4c1d8e7f6a5b4c3d2e1f",
   "item_type": "Movie",
   "name": "Blade Runner 2049 (2017)",
@@ -29,6 +37,14 @@ The file's own aspect ratio isn't good enough for that. A 2.39:1 film on a UHD d
 `ratio_source` is `cropdetect`, `stream`, `manual`, `stream_fallback` (not scanned yet, so it falls back to the file's resolution and queues a scan), or `unknown`. `session_id` is the Jellyfin session that started playback, which you can pass to `POST /Sessions/{id}/Message` to show a message on that client.
 
 - **Lets you correct it.** The plugin page lists every result with a filter, a per-item override, and a rescan button. Manual values are never overwritten.
+
+## What about Christopher Nolan or Wes Anderson?
+
+Some directors treat aspect ratio as more of a suggestion. Nolan opens the frame up to full IMAX height whenever something expensive happens on screen, and Wes Anderson changes ratio whenever the story changes decade. A lens can only be in one place at a time, so somebody has to lose.
+
+TrueAspect settles it by majority vote. It measures the black bars at a dozen points through the film and takes the median, so whichever framing covers most of the runtime wins and the occasional IMAX showpiece gets outvoted. *The Dark Knight* has about half an hour of IMAX in a two-and-a-half-hour film, so it comes out at 2.40 and the lens zooms out for scope, as it should.
+
+Majority rule cuts both ways, though. Most of *Dunkirk* was shot in IMAX, so on disc the 16:9 scenes outnumber the 2.20 ones and TrueAspect calls it 1.78. That's arguably right for a constant image height screen, since nothing gets cropped. But if you'd rather watch the beach in scope and let the IMAX shots spill over, type 2.40 into the Override box on the plugin page. Manual values are never rescanned or overwritten, so Nolan stays overruled for good.
 
 ## Installing
 
@@ -73,27 +89,45 @@ All endpoints need an admin token except reading a single item.
 | PUT | `/TrueAspect/Ratios/{itemId}` | `{"Ratio": 2.39}` sets a manual value |
 | DELETE | `/TrueAspect/Ratios/{itemId}` | forget the result and rescan |
 | POST | `/TrueAspect/RetryFailed` | clear failed results so the task retries them |
-| POST | `/TrueAspect/TestWebhook?itemId=` | send a test payload (`"event": "Test"`) |
+| POST | `/TrueAspect/TestWebhook?itemId=` | send a test payload (`"event": "Test"`) and report `Success`, `Message` and `StatusCode` |
 
 ## Home Assistant
 
-On the plugin page, set the Home Assistant URL as Jellyfin sees it (`http://host.docker.internal:8123` when Jellyfin runs in Docker on the same host) and the `webhook_id` of your automation's trigger. The plugin posts to `<url>/api/webhook/<id>`.
+On the plugin page, set the Home Assistant URL as Jellyfin sees it (`http://host.docker.internal:8123` when Jellyfin runs in Docker on the same host) and the `webhook_id` of your automation's trigger. The plugin posts to `<url>/api/webhook/<id>`. *Send test webhook* checks the connection.
 
-```yaml
-triggers:
-  - trigger: webhook
-    webhook_id: jellyfin-playback-xxxxxxxx
-    allowed_methods: [POST]
-    local_only: true
-conditions:
-  - condition: template
-    value_template: >-
-      {{ trigger.json.event == 'PlaybackStart'
-         and trigger.json.device in ['Home Theater']
-         and trigger.json.ratio | is_number }}
+### Lens memory blueprint
+
+The repo includes a Home Assistant blueprint that switches lens memories for you. It only reacts to the devices that play through the projector, and optionally only while the projector is on, so someone watching on a phone never moves the lens. It picks the widest memory that still fits the picture, with a little slack so a 2.30 encode still lands on a 2.35 memory. Anything narrower than every memory, like a 4:3 classic, falls back to the narrowest one and is pillarboxed.
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fconcurrent-recursion%2Fjellyfin-plugin-trueaspect%2Fblob%2Fmain%2Fhomeassistant%2Fblueprints%2Ftrueaspect_lens_memory.yaml)
+
+Or import it by hand under **Settings → Automations & scenes → Blueprints → Import blueprint** with this URL:
+
+```
+https://github.com/concurrent-recursion/jellyfin-plugin-trueaspect/blob/main/homeassistant/blueprints/trueaspect_lens_memory.yaml
 ```
 
-Pick a lens memory from `trigger.json.ratio`. The usual rule is the widest memory that's no wider than the movie, with a little tolerance so 2.35 encodes land on a 2.40 memory.
+Then create an automation from it. It needs Home Assistant 2024.10 or later.
+
+| Input | What it's for |
+|---|---|
+| Webhook ID | Must match the Webhook ID on the plugin page. Anyone on your network who knows it can trigger the automation, so make it hard to guess. |
+| Projector devices | Jellyfin device names that play through the projector. Unlike the plugin's allowlist, these must match the `device` field exactly, capitals included. |
+| Lens memories | Each ratio you have a memory for, mapped to its slot on the projector. Quote the ratios so YAML keeps `'2.00'` as written. |
+| Ratio tolerance | How much wider than the picture a memory may be and still be chosen. `0.03` lets a 2.30 film use the 2.35 memory. Raise it if near-misses drop to a narrower memory; lower it if wide films spill off the screen. |
+| Load lens memory | What to run to load a memory on your projector. |
+| Projector power entity | Optional. When set, the lens only moves while this entity is in one of the on states. |
+| Projector on states | The states that count as on. Defaults to `on` and `warmup`. |
+
+*Load lens memory* is where your projector's own command goes, since JVC, Sony and Epson all do it differently. It can use `{{ memory }}` (the slot), `{{ memory_ratio }}` (that slot's ratio), `{{ ratio }}` (the movie's ratio) and the full payload in `trigger.json`. If you already have a script that takes a slot number, it's one action:
+
+```yaml
+- action: script.projector_load_lens_memory
+  data:
+    memory: "{{ memory }}"
+```
+
+When the blueprint changes, **Re-import blueprint** from its menu on the Blueprints page picks up the new version without touching your inputs.
 
 ## License
 

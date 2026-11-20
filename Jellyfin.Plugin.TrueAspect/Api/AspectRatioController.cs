@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.TrueAspect.Detection;
 using Jellyfin.Plugin.TrueAspect.Services;
 using Jellyfin.Plugin.TrueAspect.Storage;
@@ -29,7 +30,39 @@ public class AspectRatioController : ControllerBase
 
     [HttpGet("Ratios")]
     [Authorize(Policy = "RequiresElevation")]
-    public ActionResult<IReadOnlyList<AspectRatioEntry>> GetAll() => Ok(_store.GetAll());
+    public ActionResult<IReadOnlyList<RatioView>> GetAll()
+    {
+        var libraries = LibraryByItem();
+        return Ok(_store.GetAll()
+            .Select(e => new RatioView(e.ItemId, e.Name, e.Ratio, e.Source, e.UpdatedAt, libraries.GetValueOrDefault(e.ItemId)))
+            .ToList());
+    }
+
+    private Dictionary<Guid, string> LibraryByItem()
+    {
+        var map = new Dictionary<Guid, string>();
+        foreach (var library in _libraryManager.GetVirtualFolders())
+        {
+            if (!Guid.TryParse(library.ItemId, out var libraryId))
+            {
+                continue;
+            }
+
+            var items = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                ParentId = libraryId,
+                Recursive = true,
+                IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
+                IsVirtualItem = false,
+            });
+            foreach (var item in items)
+            {
+                map.TryAdd(item.Id, library.Name);
+            }
+        }
+
+        return map;
+    }
 
     [HttpGet("Ratios/{itemId}")]
     [Authorize]
@@ -75,27 +108,58 @@ public class AspectRatioController : ControllerBase
     [HttpPost("TestWebhook")]
     [Authorize(Policy = "RequiresElevation")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<PlaybackPayload>> TestWebhook([FromQuery] Guid? itemId, CancellationToken cancellationToken)
+    public async Task<ActionResult<TestWebhookResult>> TestWebhook([FromQuery] Guid? itemId, CancellationToken cancellationToken)
     {
+        var config = Plugin.Instance?.Configuration;
+        var url = config?.GetWebhookUrl();
+        if (config is null || url is null)
+        {
+            return Ok(new TestWebhookResult(false, "Set the Home Assistant URL and webhook ID, then save.", null, null, null));
+        }
+
         var item = itemId is { } id ? _libraryManager.GetItemById(id) : null;
         var payload = item is not null
             ? _notifier.BuildPayload(item, "TrueAspect test", "TrueAspect", null, "Test")
             : new PlaybackPayload("Test", "TrueAspect test", "TrueAspect", null, Guid.Empty.ToString("N"), "Movie", "Test", 2.39, "manual", 1.78);
 
+        string message;
+        int? status = null;
+        var success = false;
         try
         {
-            return await _notifier.SendAsync(payload, cancellationToken).ConfigureAwait(false)
-                ? Ok(payload)
-                : BadRequest("Webhook URL is empty or the endpoint returned an error");
+            var response = await _notifier.SendAsync(payload, cancellationToken).ConfigureAwait(false);
+            if (response is null)
+            {
+                message = "Set the Home Assistant URL and webhook ID, then save.";
+            }
+            else
+            {
+                status = response.StatusCode;
+                success = response.IsSuccess;
+                var answer = $"{response.StatusCode} {response.ReasonPhrase}".TrimEnd();
+                message = success ? $"Home Assistant accepted the test ({answer})." : $"Home Assistant answered {answer}.";
+            }
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or UriFormatException
-                                   || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return BadRequest(ex.Message);
+            message = $"No answer within {config.WebhookTimeoutSeconds} seconds.";
         }
+        catch (HttpRequestException ex)
+        {
+            message = $"Could not connect: {ex.Message}";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or UriFormatException or NotSupportedException)
+        {
+            message = "The Home Assistant URL is not valid.";
+        }
+
+        return Ok(new TestWebhookResult(success, message, url, status, payload));
     }
 }
+
+public sealed record RatioView(Guid ItemId, string Name, double? Ratio, RatioSource Source, DateTimeOffset UpdatedAt, string? Library);
+
+public sealed record TestWebhookResult(bool Success, string Message, string? Url, int? StatusCode, PlaybackPayload? Payload);
 
 public sealed class ManualRatioRequest
 {

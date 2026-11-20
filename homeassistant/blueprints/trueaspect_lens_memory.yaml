@@ -1,0 +1,147 @@
+blueprint:
+  name: TrueAspect - Projector lens memory
+  description: >-
+    Loads the projector lens memory that fits the picture when TrueAspect reports
+    playback starting in Jellyfin. It picks the widest memory that is no wider than
+    the movie (plus a small tolerance), and falls back to the narrowest memory for
+    anything narrower than all of them.
+  domain: automation
+  author: TrueAspect
+  source_url: https://github.com/concurrent-recursion/jellyfin-plugin-trueaspect/blob/main/homeassistant/blueprints/trueaspect_lens_memory.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    jellyfin:
+      name: Jellyfin
+      icon: mdi:play-box-outline
+      input:
+        webhook_id:
+          name: Webhook ID
+          description: >-
+            Must match the Webhook ID on the TrueAspect plugin page. Anyone on your
+            network who knows it can trigger this automation, so make it hard to guess.
+          selector:
+            text:
+        projector_devices:
+          name: Projector devices
+          description: >-
+            Jellyfin device names that play through the projector, exactly as they
+            appear under Allowed devices on the plugin page. Playback anywhere else is
+            ignored.
+          selector:
+            text:
+              multiple: true
+    lens:
+      name: Lens memories
+      icon: mdi:projector
+      input:
+        lens_memories:
+          name: Lens memories
+          description: >-
+            Each ratio you have a lens memory for, mapped to its memory slot on the
+            projector. Quote the ratios so YAML keeps values like '2.00' as written.
+          default:
+            '1.78': 1
+            '1.85': 2
+            '2.00': 3
+            '2.20': 4
+            '2.35': 5
+            '2.76': 6
+          selector:
+            object:
+        ratio_tolerance:
+          name: Ratio tolerance
+          description: >-
+            How much wider than the picture a memory may be and still be chosen. 0.03
+            lets a 2.30 film use a 2.35 memory. Raise it if near-misses drop to a
+            narrower memory; lower it if wide films spill off the screen.
+          default: 0.03
+          selector:
+            number:
+              min: 0
+              max: 0.1
+              step: 0.01
+              mode: slider
+        load_memory:
+          name: Load lens memory
+          description: >-
+            What to run to load a memory on your projector. The slot number is
+            available as {{ memory }}, its ratio as {{ memory_ratio }}, and the
+            movie's ratio as {{ ratio }}. The full TrueAspect payload is in
+            trigger.json.
+          selector:
+            action:
+    projector:
+      name: Projector
+      icon: mdi:power
+      collapsed: true
+      input:
+        projector_entities:
+          name: Projector power entity
+          description: >-
+            Optional. When set, the lens only moves while this entity is in one of
+            the states below, so nothing happens while the projector is off.
+          default: []
+          selector:
+            entity:
+              multiple: true
+        projector_on_states:
+          name: Projector on states
+          description: States of the projector power entity that count as on.
+          default:
+            - 'on'
+            - warmup
+          selector:
+            text:
+              multiple: true
+
+mode: restart
+max_exceeded: silent
+
+triggers:
+  - trigger: webhook
+    webhook_id: !input webhook_id
+    allowed_methods:
+      - POST
+    local_only: true
+
+variables:
+  projector_devices: !input projector_devices
+  lens_memories: !input lens_memories
+  ratio_tolerance: !input ratio_tolerance
+  projector_entities: !input projector_entities
+  projector_on_states: !input projector_on_states
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.json is defined
+         and trigger.json.event == 'PlaybackStart'
+         and trigger.json.device in projector_devices
+         and trigger.json.ratio | is_number }}
+  - condition: template
+    value_template: >-
+      {{ projector_entities | count == 0
+         or projector_entities | map('states') | select('in', projector_on_states) | list | count > 0 }}
+
+actions:
+  - variables:
+      ratio: "{{ trigger.json.ratio | float }}"
+      choice: >-
+        {%- set ns = namespace(best=none, best_ratio=0, low=none, low_ratio=99) -%}
+        {%- for r, m in lens_memories.items() -%}
+          {%- set rf = r | float -%}
+          {%- if rf < ns.low_ratio -%}
+            {%- set ns.low = m -%}{%- set ns.low_ratio = rf -%}
+          {%- endif -%}
+          {%- if rf <= ratio * (1 + ratio_tolerance) and rf > ns.best_ratio -%}
+            {%- set ns.best = m -%}{%- set ns.best_ratio = rf -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {{ {'memory': ns.best, 'ratio': ns.best_ratio} if ns.best is not none
+           else {'memory': ns.low, 'ratio': ns.low_ratio} }}
+  - variables:
+      memory: "{{ choice.memory }}"
+      memory_ratio: "{{ choice.ratio }}"
+  - choose: []
+    default: !input load_memory
