@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using MediaBrowser.Model.Plugins;
 
 namespace Jellyfin.Plugin.TrueAspect.Configuration;
@@ -8,6 +9,7 @@ public class PluginConfiguration : BasePluginConfiguration
 
     public string WebhookId { get; set; } = string.Empty;
 
+    [SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Jellyfin serializes plugin configuration to XML and JSON, which need a settable array.")]
     public string[] AllowedDevices { get; set; } = [];
 
     public int WebhookTimeoutSeconds { get; set; } = 10;

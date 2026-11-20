@@ -1,25 +1,8 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using MediaBrowser.Common.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TrueAspect.Storage;
-
-[JsonConverter(typeof(JsonStringEnumConverter<RatioSource>))]
-public enum RatioSource
-{
-    Cropdetect,
-    Stream,
-    Manual,
-    Failed,
-}
-
-public sealed record AspectRatioEntry(
-    Guid ItemId,
-    string Name,
-    double? Ratio,
-    RatioSource Source,
-    DateTimeOffset UpdatedAt);
 
 public sealed partial class AspectRatioStore(IApplicationPaths applicationPaths, ILogger<AspectRatioStore> logger)
 {
@@ -28,8 +11,9 @@ public sealed partial class AspectRatioStore(IApplicationPaths applicationPaths,
     private readonly Lock _lock = new();
 
     // The plugin's own DataFolderPath lives inside the versioned plugin directory, which is replaced on every upgrade.
-
     public string FilePath { get; } = Path.Combine(applicationPaths.DataPath, "trueaspect", "ratios.json");
+
+    private Dictionary<Guid, AspectRatioEntry> Entries => field ??= Load();
 
     public AspectRatioEntry? Get(Guid itemId)
     {
@@ -103,8 +87,6 @@ public sealed partial class AspectRatioStore(IApplicationPaths applicationPaths,
             return ids.Count;
         }
     }
-
-    private Dictionary<Guid, AspectRatioEntry> Entries => field ??= Load();
 
     private Dictionary<Guid, AspectRatioEntry> Load()
     {

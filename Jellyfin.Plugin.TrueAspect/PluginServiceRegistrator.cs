@@ -13,8 +13,8 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     {
         serviceCollection.AddSingleton<AspectRatioStore>();
         serviceCollection.AddSingleton<AspectRatioDetector>();
-        serviceCollection.AddSingleton<ScanQueue>();
-        serviceCollection.AddHostedService(sp => sp.GetRequiredService<ScanQueue>());
+        serviceCollection.AddSingleton<ScanQueueService>();
+        serviceCollection.AddHostedService(sp => sp.GetRequiredService<ScanQueueService>());
         serviceCollection.AddSingleton<PlaybackNotifier>();
         serviceCollection.AddHostedService(sp => sp.GetRequiredService<PlaybackNotifier>());
     }

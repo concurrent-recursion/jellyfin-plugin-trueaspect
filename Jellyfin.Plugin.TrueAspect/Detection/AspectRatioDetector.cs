@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TrueAspect.Detection;
 
-public sealed partial class AspectRatioDetector
+public sealed partial class AspectRatioDetector : IDisposable
 {
     private readonly IMediaEncoder _mediaEncoder;
     private readonly AspectRatioStore _store;
@@ -25,6 +25,14 @@ public sealed partial class AspectRatioDetector
         _mediaEncoder = mediaEncoder;
         _store = store;
         _logger = logger;
+    }
+
+    public void Dispose()
+    {
+        lock (_gateLock)
+        {
+            _gate.Dispose();
+        }
     }
 
     public static bool IsCandidate(BaseItem item, PluginConfiguration config) =>

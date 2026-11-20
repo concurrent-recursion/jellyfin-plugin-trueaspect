@@ -1,6 +1,6 @@
 name: "TrueAspect"
 guid: "b3512314-ef01-4cde-8b1b-71b3ef6046a0"
-version: "1.0.0.0"
+version: "1.0.1.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 owner: "concurrent_recursion"
@@ -14,5 +14,7 @@ image: "assets/trueaspect.png"
 artifacts:
   - "Jellyfin.Plugin.TrueAspect.dll"
 changelog: >-
-  Initial release: cropdetect-based aspect ratio detection, a scheduled scan task,
-  automatic scans of new items, manual overrides and a Home Assistant playback webhook.
+  New plugin icon. The detector now releases its scan lock cleanly when Jellyfin shuts down.
+  Behind the scenes the code builds with the Jellyfin plugin template's analyzers and treats
+  warnings as errors, and the repo gained debug setups for Rider and VS Code. Settings, stored
+  results, the API and the webhook payload are unchanged.

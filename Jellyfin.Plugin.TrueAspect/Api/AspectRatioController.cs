@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.TrueAspect.Detection;
 using Jellyfin.Plugin.TrueAspect.Services;
@@ -16,11 +15,11 @@ namespace Jellyfin.Plugin.TrueAspect.Api;
 public class AspectRatioController : ControllerBase
 {
     private readonly AspectRatioStore _store;
-    private readonly ScanQueue _scanQueue;
+    private readonly ScanQueueService _scanQueue;
     private readonly PlaybackNotifier _notifier;
     private readonly ILibraryManager _libraryManager;
 
-    public AspectRatioController(AspectRatioStore store, ScanQueue scanQueue, PlaybackNotifier notifier, ILibraryManager libraryManager)
+    public AspectRatioController(AspectRatioStore store, ScanQueueService scanQueue, PlaybackNotifier notifier, ILibraryManager libraryManager)
     {
         _store = store;
         _scanQueue = scanQueue;
@@ -155,14 +154,4 @@ public class AspectRatioController : ControllerBase
 
         return Ok(new TestWebhookResult(success, message, url, status, payload));
     }
-}
-
-public sealed record RatioView(Guid ItemId, string Name, double? Ratio, RatioSource Source, DateTimeOffset UpdatedAt, string? Library);
-
-public sealed record TestWebhookResult(bool Success, string Message, string? Url, int? StatusCode, PlaybackPayload? Payload);
-
-public sealed class ManualRatioRequest
-{
-    [Range(1.0, 4.0)]
-    public double Ratio { get; set; }
 }

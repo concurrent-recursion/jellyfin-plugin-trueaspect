@@ -67,6 +67,20 @@ scripts/install.sh --restart
 
 The plugin's name, version, `targetAbi`, changelog and image all live in `build.yaml`, which both `scripts/build.sh` and the release workflow read. It references the Jellyfin 12.0.0 packages and declares `targetAbi` 12.0.0.0, so it loads on any 12.x server. To target something else, change `targetAbi` and bump the package versions in the `.csproj` to match.
 
+### Debugging in Rider or VS Code
+
+Both editors can run a Jellyfin server from source with the plugin loaded, so you can set breakpoints in TrueAspect and step through it. The setup expects the server and web client checked out next to this repo and built once:
+
+```sh
+cd ..
+git clone https://github.com/jellyfin/jellyfin.git
+git clone https://github.com/jellyfin/jellyfin-web.git
+dotnet build jellyfin/Jellyfin.Server
+(cd jellyfin-web && npm ci && npm run build:development)
+```
+
+Check out the tag that matches the server you're targeting (for example `v12.4.0`) in both repos first. In Rider, debug the shared *Jellyfin with TrueAspect* run configuration; in VS Code, pick *Launch Jellyfin with TrueAspect* in the Run and Debug view. Either one builds the plugin, copies it into `~/.local/share/jellyfin/plugins/TrueAspect` (`%LOCALAPPDATA%\jellyfin` on Windows), and starts the server on port 8096. That data folder belongs to the debug server only, so your real server's settings and results aren't touched. Detection needs ffmpeg, so set its path under *Dashboard → Playback → Transcoding* if the debug server doesn't find one. If your checkouts are somewhere else, change the paths in `.run/Jellyfin with TrueAspect.run.xml` or `.vscode/settings.json`. Rider's configuration starts the `jellyfin` executable, so on Windows point it at `jellyfin.exe`. `scripts/debug-install.sh` does the build-and-copy step on its own and honours `JELLYFIN_DATA_DIR`.
+
 ## Releasing
 
 Bump `version` and `changelog` in `build.yaml`, commit, then push a matching tag:

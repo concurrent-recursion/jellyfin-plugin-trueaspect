@@ -1,0 +1,9 @@
+{
+    "jellyfinDir": "${workspaceFolder}/../jellyfin/Jellyfin.Server",
+    "jellyfinWebDir": "${workspaceFolder}/../jellyfin-web",
+    "jellyfinWindowsDataDir": "${env:LOCALAPPDATA}/jellyfin",
+    "jellyfinLinuxDataDir": "$HOME/.local/share/jellyfin",
+    "pluginName": "Jellyfin.Plugin.TrueAspect",
+    "pluginFolder": "TrueAspect",
+    "dotnet.defaultSolution": "trueaspect.slnx"
+}

@@ -1,5 +1,4 @@
 using System.Net.Http.Json;
-using System.Text.Json.Serialization;
 using Jellyfin.Plugin.TrueAspect.Detection;
 using Jellyfin.Plugin.TrueAspect.Storage;
 using MediaBrowser.Controller.Entities;
@@ -10,34 +9,19 @@ using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TrueAspect.Services;
 
-public sealed record PlaybackPayload(
-    [property: JsonPropertyName("event")] string Event,
-    [property: JsonPropertyName("device")] string? Device,
-    [property: JsonPropertyName("client")] string? Client,
-    [property: JsonPropertyName("user")] string? User,
-    [property: JsonPropertyName("item_id")] string ItemId,
-    [property: JsonPropertyName("item_type")] string ItemType,
-    [property: JsonPropertyName("name")] string Name,
-    [property: JsonPropertyName("ratio")] double? Ratio,
-    [property: JsonPropertyName("ratio_source")] string RatioSource,
-    [property: JsonPropertyName("stream_ratio")] double? StreamRatio,
-    [property: JsonPropertyName("session_id")] string? SessionId = null);
-
-public sealed record WebhookResponse(int StatusCode, string? ReasonPhrase, bool IsSuccess);
-
 public sealed partial class PlaybackNotifier : IHostedService
 {
     private readonly ISessionManager _sessionManager;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly AspectRatioStore _store;
-    private readonly ScanQueue _scanQueue;
+    private readonly ScanQueueService _scanQueue;
     private readonly ILogger<PlaybackNotifier> _logger;
 
     public PlaybackNotifier(
         ISessionManager sessionManager,
         IHttpClientFactory httpClientFactory,
         AspectRatioStore store,
-        ScanQueue scanQueue,
+        ScanQueueService scanQueue,
         ILogger<PlaybackNotifier> logger)
     {
         _sessionManager = sessionManager;

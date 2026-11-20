@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TrueAspect.Services;
 
-public sealed partial class ScanQueue : BackgroundService
+public sealed partial class ScanQueueService : BackgroundService
 {
     private readonly Channel<(Guid ItemId, DateTimeOffset Due)> _channel = Channel.CreateUnbounded<(Guid ItemId, DateTimeOffset Due)>();
     private readonly HashSet<Guid> _pending = [];
@@ -16,9 +16,9 @@ public sealed partial class ScanQueue : BackgroundService
     private readonly ILibraryManager _libraryManager;
     private readonly AspectRatioDetector _detector;
     private readonly AspectRatioStore _store;
-    private readonly ILogger<ScanQueue> _logger;
+    private readonly ILogger<ScanQueueService> _logger;
 
-    public ScanQueue(ILibraryManager libraryManager, AspectRatioDetector detector, AspectRatioStore store, ILogger<ScanQueue> logger)
+    public ScanQueueService(ILibraryManager libraryManager, AspectRatioDetector detector, AspectRatioStore store, ILogger<ScanQueueService> logger)
     {
         _libraryManager = libraryManager;
         _detector = detector;
