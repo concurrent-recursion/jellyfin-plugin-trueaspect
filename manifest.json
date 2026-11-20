@@ -1,1 +1,22 @@
-[]
+[
+    {
+        "guid": "b3512314-ef01-4cde-8b1b-71b3ef6046a0",
+        "name": "TrueAspect",
+        "description": "Detects the real picture aspect ratio of movies, including letterboxed files where the black bars are baked into a 16:9 frame, and pushes it to a webhook such as Home Assistant when playback starts. Built for switching projector lens memories.",
+        "overview": "Letterbox-aware aspect ratio detection with playback webhooks.",
+        "owner": "concurrent_recursion",
+        "category": "General",
+        "versions": [
+            {
+                "version": "1.0.0.0",
+                "changelog": "Initial release: cropdetect-based aspect ratio detection, a scheduled scan task, automatic scans of new items, manual overrides and a Home Assistant playback webhook.",
+                "targetAbi": "12.0.0.0",
+                "sourceUrl": "https://github.com/concurrent-recursion/jellyfin-plugin-trueaspect/releases/download/v1.0.0.0/trueaspect_1.0.0.0.zip",
+                "checksum": "1371458febcc24f7ed2314a7593ce59d",
+                "timestamp": "2026-11-20T03:48:40Z"
+            }
+        ],
+        "image": "trueaspect.png",
+        "imageUrl": "https://concurrent-recursion.github.io/jellyfin-plugin-trueaspect/trueaspect/trueaspect.png"
+    }
+]
