@@ -6,7 +6,7 @@
 </head>
 <body>
 <div id="TrueAspectConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
-     data-require="emby-input,emby-button,emby-checkbox">
+     data-require="emby-input,emby-button,emby-checkbox,emby-textarea">
     <div data-role="content">
         <div class="content-primary">
             <h2 class="sectionTitle">TrueAspect</h2>
@@ -20,9 +20,14 @@
                     </div>
                     <div class="inputContainer">
                         <input is="emby-input" type="text" id="WebhookId" label="Webhook ID" />
-                        <div class="fieldDescription">The webhook_id of the Home Assistant automation trigger. Every playback start, on any device, is posted with its device name, item and aspect ratio. Filter devices in the automation.</div>
+                        <div class="fieldDescription">The webhook_id of the Home Assistant automation trigger. Every playback start on an allowed device is posted with its device name, item and aspect ratio.</div>
                     </div>
                     <div class="fieldDescription" id="WebhookPreview"></div>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="AllowedDevices" label="Allowed devices" rows="4"></textarea>
+                        <div class="fieldDescription">One device name per line, matched without regard to case. Only playback on these devices is posted. Leave empty to post every device.</div>
+                        <div id="KnownDevices" style="display:flex;gap:.5em;flex-wrap:wrap;align-items:center;margin-top:.5em"></div>
+                    </div>
                 </div>
 
                 <div class="verticalSection">
@@ -41,16 +46,49 @@
                     </label>
                     <div class="inputContainer">
                         <input is="emby-input" type="number" id="SampleCount" min="3" max="60" label="Samples per item" />
-                        <div class="fieldDescription">Points through the video where cropdetect runs. The median wins.</div>
+                        <div class="fieldDescription">Points through the video where cropdetect runs. More samples take longer but are harder to fool with dark scenes.</div>
                     </div>
                     <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MaxConcurrentScans" min="1" max="8" label="Scans at once" />
+                        <div class="fieldDescription">How many items are scanned in parallel. Each scan runs its own ffmpeg process.</div>
+                    </div>
+                </div>
+
+                <details class="verticalSection">
+                    <summary style="cursor:pointer"><h3 class="sectionTitle" style="display:inline-block">Advanced</h3></summary>
+                    <p class="fieldDescription">Changes here only affect items scanned afterwards. Rescan an item to apply them to it.</p>
+                    <div class="inputContainer">
                         <input is="emby-input" type="number" id="FramesPerSample" min="2" max="60" label="Frames per sample" />
+                        <div class="fieldDescription">Frames cropdetect reads at each sample point.</div>
                     </div>
                     <div class="inputContainer">
                         <input is="emby-input" type="number" id="BlackLimit" min="0.01" max="0.5" step="0.01" label="Black threshold" />
                         <div class="fieldDescription">cropdetect limit as a fraction of full range. Raise it if dark bars are not being detected.</div>
                     </div>
-                </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="AlreadyCroppedRatio" min="1.8" max="4" step="0.01" label="Already cropped above" />
+                        <div class="fieldDescription">Files whose own aspect ratio is at least this wide are taken at face value and not scanned. Set it to 4 to always run cropdetect.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="SkipStartPercent" min="0" max="40" step="0.5" label="Skip at start (%)" />
+                        <div class="fieldDescription">Part of the runtime at the start that is never sampled, to stay clear of logos and opening titles.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="SkipEndPercent" min="0" max="40" step="0.5" label="Skip at end (%)" />
+                        <div class="fieldDescription">Part of the runtime at the end that is never sampled. Raise it for films with long credits framed differently from the film.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="QueueDelaySeconds" min="0" max="3600" label="Delay before queued scans (seconds)" />
+                        <div class="fieldDescription">Wait before scanning a new, rescanned or unscanned played item, so Jellyfin can finish reading its metadata first. Raise it if new items fall back to the stream ratio.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="FfmpegTimeoutSeconds" min="10" max="1800" label="ffmpeg timeout (seconds)" />
+                        <div class="fieldDescription">Longest a single ffprobe or ffmpeg sample may run before it is dropped. Raise it for large files on slow network storage.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="WebhookTimeoutSeconds" min="1" max="60" label="Webhook timeout (seconds)" />
+                    </div>
+                </details>
 
                 <div>
                     <button is="emby-button" type="submit" class="raised button-submit block emby-button"><span>Save</span></button>
@@ -81,7 +119,8 @@
             const pluginId = 'b3512314-ef01-4cde-8b1b-71b3ef6046a0';
             const page = document.querySelector('#TrueAspectConfigPage');
             const textFields = ['HomeAssistantUrl', 'WebhookId'];
-            const numberFields = ['SampleCount', 'FramesPerSample', 'BlackLimit'];
+            const numberFields = ['SampleCount', 'MaxConcurrentScans', 'FramesPerSample', 'BlackLimit', 'AlreadyCroppedRatio',
+                'SkipStartPercent', 'SkipEndPercent', 'QueueDelaySeconds', 'FfmpegTimeoutSeconds', 'WebhookTimeoutSeconds'];
             const checkFields = ['ScanMovies', 'ScanEpisodes', 'ScanOnItemAdded'];
             let entries = [];
 
@@ -159,6 +198,40 @@
                     base && id ? `Posts to ${base}/api/webhook/${encodeURIComponent(id)}` : 'Set both fields to enable the webhook.';
             }
 
+            function allowedDevices() {
+                return page.querySelector('#AllowedDevices').value.split('\n').map(d => d.trim()).filter(d => d);
+            }
+
+            async function loadKnownDevices() {
+                const container = page.querySelector('#KnownDevices');
+                container.replaceChildren();
+                let devices = [];
+                try {
+                    const result = await ApiClient.getJSON(ApiClient.getUrl('Devices'));
+                    devices = [...new Set((result.Items || []).map(d => d.CustomName || d.Name).filter(n => n))].sort();
+                } catch (err) {
+                    return;
+                }
+                if (!devices.length) return;
+                const label = document.createElement('span');
+                label.className = 'fieldDescription';
+                label.textContent = 'Add a known device:';
+                container.append(label);
+                for (const name of devices) {
+                    const add = document.createElement('button');
+                    add.type = 'button';
+                    add.textContent = name;
+                    add.className = 'raised emby-button';
+                    add.addEventListener('click', () => {
+                        const current = allowedDevices();
+                        if (!current.some(d => d.toLowerCase() === name.toLowerCase())) {
+                            page.querySelector('#AllowedDevices').value = [...current, name].join('\n');
+                        }
+                    });
+                    container.append(add);
+                }
+            }
+
             async function load() {
                 entries = await api('GET', 'TrueAspect/Ratios');
                 render();
@@ -166,24 +239,34 @@
 
             page.addEventListener('pageshow', async () => {
                 Dashboard.showLoadingMsg();
-                const config = await ApiClient.getPluginConfiguration(pluginId);
-                textFields.forEach(f => page.querySelector('#' + f).value = config[f] || '');
-                numberFields.forEach(f => page.querySelector('#' + f).value = config[f]);
-                checkFields.forEach(f => page.querySelector('#' + f).checked = !!config[f]);
-                updatePreview();
-                await load();
-                Dashboard.hideLoadingMsg();
+                try {
+                    const config = await ApiClient.getPluginConfiguration(pluginId);
+                    textFields.forEach(f => page.querySelector('#' + f).value = config[f] || '');
+                    numberFields.forEach(f => page.querySelector('#' + f).value = config[f]);
+                    checkFields.forEach(f => page.querySelector('#' + f).checked = !!config[f]);
+                    page.querySelector('#AllowedDevices').value = (config.AllowedDevices || []).join('\n');
+                    updatePreview();
+                    await Promise.all([load(), loadKnownDevices()]);
+                } finally {
+                    Dashboard.hideLoadingMsg();
+                }
             });
 
             page.querySelector('#TrueAspectConfigForm').addEventListener('submit', async (ev) => {
                 ev.preventDefault();
                 Dashboard.showLoadingMsg();
-                const config = await ApiClient.getPluginConfiguration(pluginId);
-                textFields.forEach(f => config[f] = page.querySelector('#' + f).value.trim());
-                numberFields.forEach(f => config[f] = Number(page.querySelector('#' + f).value));
-                checkFields.forEach(f => config[f] = page.querySelector('#' + f).checked);
-                const result = await ApiClient.updatePluginConfiguration(pluginId, config);
-                Dashboard.processPluginConfigurationUpdateResult(result);
+                try {
+                    const config = await ApiClient.getPluginConfiguration(pluginId);
+                    textFields.forEach(f => config[f] = page.querySelector('#' + f).value.trim());
+                    numberFields.forEach(f => config[f] = Number(page.querySelector('#' + f).value));
+                    checkFields.forEach(f => config[f] = page.querySelector('#' + f).checked);
+                    config.AllowedDevices = allowedDevices();
+                    const result = await ApiClient.updatePluginConfiguration(pluginId, config);
+                    Dashboard.processPluginConfigurationUpdateResult(result);
+                } catch (err) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Saving failed. Check the server log.');
+                }
             });
 
             page.querySelector('#TestWebhook').addEventListener('click', async () => {

@@ -12,7 +12,6 @@ namespace Jellyfin.Plugin.TrueAspect.Api;
 
 [ApiController]
 [Route("TrueAspect")]
-[Authorize(Policy = "RequiresElevation")]
 public class AspectRatioController : ControllerBase
 {
     private readonly AspectRatioStore _store;
@@ -29,6 +28,7 @@ public class AspectRatioController : ControllerBase
     }
 
     [HttpGet("Ratios")]
+    [Authorize(Policy = "RequiresElevation")]
     public ActionResult<IReadOnlyList<AspectRatioEntry>> GetAll() => Ok(_store.GetAll());
 
     [HttpGet("Ratios/{itemId}")]
@@ -39,6 +39,7 @@ public class AspectRatioController : ControllerBase
         _store.Get(itemId) is { } entry ? Ok(entry) : NotFound();
 
     [HttpPut("Ratios/{itemId}")]
+    [Authorize(Policy = "RequiresElevation")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult<AspectRatioEntry> SetManual([FromRoute] Guid itemId, [FromBody] ManualRatioRequest request)
@@ -54,6 +55,7 @@ public class AspectRatioController : ControllerBase
     }
 
     [HttpDelete("Ratios/{itemId}")]
+    [Authorize(Policy = "RequiresElevation")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public ActionResult Rescan([FromRoute] Guid itemId)
     {
@@ -67,9 +69,11 @@ public class AspectRatioController : ControllerBase
     }
 
     [HttpPost("RetryFailed")]
+    [Authorize(Policy = "RequiresElevation")]
     public ActionResult<int> RetryFailed() => Ok(_store.RemoveWhere(e => e.Source == RatioSource.Failed));
 
     [HttpPost("TestWebhook")]
+    [Authorize(Policy = "RequiresElevation")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PlaybackPayload>> TestWebhook([FromQuery] Guid? itemId, CancellationToken cancellationToken)
@@ -85,7 +89,8 @@ public class AspectRatioController : ControllerBase
                 ? Ok(payload)
                 : BadRequest("Webhook URL is empty or the endpoint returned an error");
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or UriFormatException
+                                   || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
         {
             return BadRequest(ex.Message);
         }

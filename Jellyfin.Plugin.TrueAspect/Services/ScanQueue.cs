@@ -8,12 +8,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TrueAspect.Services;
 
-public sealed class ScanQueue : BackgroundService
+public sealed partial class ScanQueue : BackgroundService
 {
-    // Jellyfin raises ItemAdded before it has probed the file, so give the metadata refresh time to fill in streams and runtime.
-    private static readonly TimeSpan SettleDelay = TimeSpan.FromMinutes(2);
-
-    private readonly Channel<Guid> _channel = Channel.CreateUnbounded<Guid>();
+    private readonly Channel<(Guid ItemId, DateTimeOffset Due)> _channel = Channel.CreateUnbounded<(Guid ItemId, DateTimeOffset Due)>();
     private readonly HashSet<Guid> _pending = [];
     private readonly Lock _pendingLock = new();
     private readonly ILibraryManager _libraryManager;
@@ -39,7 +36,9 @@ public sealed class ScanQueue : BackgroundService
             }
         }
 
-        _channel.Writer.TryWrite(itemId);
+        // Jellyfin raises ItemAdded before it has probed the file, so give the metadata refresh time to fill in streams and runtime.
+        var delay = TimeSpan.FromSeconds(Plugin.Instance?.Configuration.QueueDelaySeconds ?? 120);
+        _channel.Writer.TryWrite((itemId, DateTimeOffset.UtcNow + delay));
     }
 
     public override Task StartAsync(CancellationToken cancellationToken)
@@ -56,30 +55,49 @@ public sealed class ScanQueue : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var itemId in _channel.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
+        var running = new List<Task>();
+        try
         {
-            try
+            await foreach (var (itemId, due) in _channel.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
             {
-                await Task.Delay(SettleDelay, stoppingToken).ConfigureAwait(false);
-                if (_store.Get(itemId) is null && _libraryManager.GetItemById(itemId) is Video video)
+                var wait = due - DateTimeOffset.UtcNow;
+                if (wait > TimeSpan.Zero)
                 {
-                    await _detector.DetectAsync(video, stoppingToken).ConfigureAwait(false);
+                    await Task.Delay(wait, stoppingToken).ConfigureAwait(false);
                 }
+
+                running.RemoveAll(t => t.IsCompleted);
+                running.Add(ScanAsync(itemId, stoppingToken));
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+        }
+
+        await Task.WhenAll(running).ConfigureAwait(false);
+    }
+
+    private async Task ScanAsync(Guid itemId, CancellationToken stoppingToken)
+    {
+        try
+        {
+            if (_store.Get(itemId) is null && _libraryManager.GetItemById(itemId) is Video video)
             {
-                break;
+                await _detector.DetectAsync(video, stoppingToken).ConfigureAwait(false);
             }
-            catch (Exception ex)
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            LogDetectionFailed(ex, itemId);
+        }
+        finally
+        {
+            lock (_pendingLock)
             {
-                _logger.LogError(ex, "Aspect ratio detection failed for {ItemId}", itemId);
-            }
-            finally
-            {
-                lock (_pendingLock)
-                {
-                    _pending.Remove(itemId);
-                }
+                _pending.Remove(itemId);
             }
         }
     }
@@ -92,4 +110,7 @@ public sealed class ScanQueue : BackgroundService
             Enqueue(e.Item.Id);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Aspect ratio detection failed for {ItemId}")]
+    private partial void LogDetectionFailed(Exception ex, Guid itemId);
 }

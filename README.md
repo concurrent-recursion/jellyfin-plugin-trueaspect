@@ -8,7 +8,7 @@ The file's own aspect ratio isn't good enough for that. A 2.39:1 film on a UHD d
 
 - **Detects** ratios with Jellyfin's bundled ffmpeg, either from the *Detect aspect ratios* scheduled task (daily at 03:00 by default) or automatically a couple of minutes after a new item is added.
 - **Stores** results in `<jellyfin data>/trueaspect/ratios.json` (`/config/data/trueaspect/ratios.json` in the official Docker image). That sits outside the versioned plugin folder so upgrades keep it, and metadata refreshes, NFO rewrites and tag changes never touch it.
-- **Pushes** a Home Assistant webhook every time playback starts, on any device. The payload carries the device name, so the automation decides which devices it cares about:
+- **Pushes** a Home Assistant webhook every time playback starts. By default that's every device; list device names under *Allowed devices* to post only those. The payload carries the device name either way, so the automation can filter too:
 
 ```json
 {

@@ -21,22 +21,15 @@ public sealed record AspectRatioEntry(
     RatioSource Source,
     DateTimeOffset UpdatedAt);
 
-public sealed class AspectRatioStore
+public sealed partial class AspectRatioStore(IApplicationPaths applicationPaths, ILogger<AspectRatioStore> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    private readonly ILogger<AspectRatioStore> _logger;
     private readonly Lock _lock = new();
-    private Dictionary<Guid, AspectRatioEntry>? _entries;
 
-    public AspectRatioStore(IApplicationPaths applicationPaths, ILogger<AspectRatioStore> logger)
-    {
-        _logger = logger;
-        // The plugin's own DataFolderPath lives inside the versioned plugin directory, which is replaced on every upgrade.
-        FilePath = Path.Combine(applicationPaths.DataPath, "trueaspect", "ratios.json");
-    }
+    // The plugin's own DataFolderPath lives inside the versioned plugin directory, which is replaced on every upgrade.
 
-    public string FilePath { get; }
+    public string FilePath { get; } = Path.Combine(applicationPaths.DataPath, "trueaspect", "ratios.json");
 
     public AspectRatioEntry? Get(Guid itemId)
     {
@@ -60,6 +53,21 @@ public sealed class AspectRatioStore
         {
             Entries[entry.ItemId] = entry;
             Save();
+        }
+    }
+
+    public AspectRatioEntry GetOrAdd(AspectRatioEntry entry)
+    {
+        lock (_lock)
+        {
+            if (Entries.TryGetValue(entry.ItemId, out var existing))
+            {
+                return existing;
+            }
+
+            Entries[entry.ItemId] = entry;
+            Save();
+            return entry;
         }
     }
 
@@ -96,35 +104,36 @@ public sealed class AspectRatioStore
         }
     }
 
-    private Dictionary<Guid, AspectRatioEntry> Entries => _entries ??= Load();
+    private Dictionary<Guid, AspectRatioEntry> Entries => field ??= Load();
 
     private Dictionary<Guid, AspectRatioEntry> Load()
     {
-        var path = FilePath;
-        if (!File.Exists(path))
+        if (!File.Exists(FilePath))
         {
             return new Dictionary<Guid, AspectRatioEntry>();
         }
 
         try
         {
-            var list = JsonSerializer.Deserialize<List<AspectRatioEntry>>(File.ReadAllText(path), JsonOptions) ?? [];
+            var list = JsonSerializer.Deserialize<List<AspectRatioEntry>>(File.ReadAllText(FilePath), JsonOptions) ?? [];
             return list.ToDictionary(e => e.ItemId);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException)
         {
-            _logger.LogError(ex, "Could not read {Path}; starting with an empty store", path);
-            File.Copy(path, path + ".corrupt", overwrite: true);
+            LogLoadFailed(logger, ex, FilePath);
+            File.Copy(FilePath, FilePath + ".corrupt", overwrite: true);
             return new Dictionary<Guid, AspectRatioEntry>();
         }
     }
 
     private void Save()
     {
-        var path = FilePath;
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var tmp = path + ".tmp";
+        Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+        var tmp = FilePath + ".tmp";
         File.WriteAllText(tmp, JsonSerializer.Serialize(Entries.Values.ToList(), JsonOptions));
-        File.Move(tmp, path, overwrite: true);
+        File.Move(tmp, FilePath, overwrite: true);
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Could not read {Path}; starting with an empty store")]
+    private static partial void LogLoadFailed(ILogger logger, Exception ex, string path);
 }

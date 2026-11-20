@@ -14,6 +14,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         : base(applicationPaths, xmlSerializer)
     {
         Instance = this;
+        Configuration.Normalize();
     }
 
     public static Plugin? Instance { get; private set; }
@@ -25,12 +26,18 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override string Description =>
         "Detects the real picture aspect ratio of movies (including letterboxed files) and pushes it to Home Assistant on playback.";
 
+    public override void UpdateConfiguration(BasePluginConfiguration configuration)
+    {
+        ((PluginConfiguration)configuration).Normalize();
+        base.UpdateConfiguration(configuration);
+    }
+
     public IEnumerable<PluginPageInfo> GetPages()
     {
         yield return new PluginPageInfo
         {
             Name = Name,
-            EmbeddedResourcePath = $"{GetType().Namespace}.Configuration.configPage.html",
+            EmbeddedResourcePath = $"{GetType().Namespace}.Configuration.configPage.html"
         };
     }
 }

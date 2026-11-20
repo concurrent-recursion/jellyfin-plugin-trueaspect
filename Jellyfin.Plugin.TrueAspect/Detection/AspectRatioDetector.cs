@@ -13,13 +13,12 @@ namespace Jellyfin.Plugin.TrueAspect.Detection;
 
 public sealed partial class AspectRatioDetector
 {
-    private const double AlreadyCroppedRatio = 2.0;
-    private static readonly TimeSpan SampleTimeout = TimeSpan.FromMinutes(2);
-
     private readonly IMediaEncoder _mediaEncoder;
     private readonly AspectRatioStore _store;
     private readonly ILogger<AspectRatioDetector> _logger;
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly Lock _gateLock = new();
+    private SemaphoreSlim _gate = new(1, 1);
+    private int _gateSize = 1;
 
     public AspectRatioDetector(IMediaEncoder mediaEncoder, AspectRatioStore store, ILogger<AspectRatioDetector> logger)
     {
@@ -63,13 +62,19 @@ public sealed partial class AspectRatioDetector
     public async Task<AspectRatioEntry> DetectAsync(Video item, CancellationToken cancellationToken)
     {
         var config = Plugin.Instance!.Configuration;
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var gate = Gate(config.MaxConcurrentScans);
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            if (_store.Get(item.Id) is { } existing)
+            {
+                return existing;
+            }
+
             var streamRatio = StreamRatio(item);
             double? ratio;
             RatioSource source;
-            if (streamRatio >= AlreadyCroppedRatio)
+            if (streamRatio >= config.AlreadyCroppedRatio)
             {
                 ratio = streamRatio;
                 source = RatioSource.Stream;
@@ -80,36 +85,53 @@ public sealed partial class AspectRatioDetector
                 source = ratio is null ? RatioSource.Failed : RatioSource.Cropdetect;
             }
 
-            var entry = new AspectRatioEntry(item.Id, DisplayName(item), ratio, source, DateTimeOffset.UtcNow);
-            _store.Set(entry);
-            _logger.LogInformation("{Name}: aspect ratio {Ratio} ({Source})", entry.Name, ratio, source);
+            var entry = _store.GetOrAdd(new AspectRatioEntry(item.Id, DisplayName(item), ratio, source, DateTimeOffset.UtcNow));
+            LogDetected(entry.Name, entry.Ratio, entry.Source);
             return entry;
         }
         finally
         {
-            _gate.Release();
+            gate.Release();
+        }
+    }
+
+    private SemaphoreSlim Gate(int size)
+    {
+        lock (_gateLock)
+        {
+            if (size != _gateSize)
+            {
+                _gate = new SemaphoreSlim(size, size);
+                _gateSize = size;
+            }
+
+            return _gate;
         }
     }
 
     public static string DisplayName(BaseItem item) => item switch
     {
-        MediaBrowser.Controller.Entities.TV.Episode ep =>
-            $"{ep.SeriesName} S{ep.ParentIndexNumber:00}E{ep.IndexNumber:00} - {ep.Name}",
+        MediaBrowser.Controller.Entities.TV.Episode { ParentIndexNumber: { } season, IndexNumber: { } number } ep =>
+            $"{ep.SeriesName} S{season:00}E{number:00} - {ep.Name}",
+        MediaBrowser.Controller.Entities.TV.Episode ep => $"{ep.SeriesName} - {ep.Name}",
         _ when item.ProductionYear is { } year => $"{item.Name} ({year})",
         _ => item.Name,
     };
 
     private async Task<double?> CropDetectAsync(Video item, PluginConfiguration config, CancellationToken cancellationToken)
     {
-        var probe = await ProbeAsync(item.Path, cancellationToken).ConfigureAwait(false);
+        var timeout = TimeSpan.FromSeconds(config.FfmpegTimeoutSeconds);
+        var probe = await ProbeAsync(item.Path, timeout, cancellationToken).ConfigureAwait(false);
         var duration = item.RunTimeTicks is > 0 ? TimeSpan.FromTicks(item.RunTimeTicks.Value) : probe.Duration;
         if (duration is not { TotalSeconds: > 60 } || probe.Width <= 0 || probe.Height <= 0)
         {
-            _logger.LogWarning("{Name}: no usable duration or frame size, skipping cropdetect", item.Name);
+            LogNoDuration(item.Name);
             return null;
         }
 
-        var samples = Math.Max(3, config.SampleCount);
+        var samples = config.SampleCount;
+        var start = config.SkipStartPercent / 100;
+        var span = Math.Max(0.1, 1 - start - (config.SkipEndPercent / 100));
         var limit = config.BlackLimit.ToString(CultureInfo.InvariantCulture);
         var tops = new List<int>(samples);
         var bottoms = new List<int>(samples);
@@ -117,17 +139,18 @@ public sealed partial class AspectRatioDetector
         var rights = new List<int>(samples);
         for (var i = 1; i <= samples; i++)
         {
-            var seconds = (int)(duration.Value.TotalSeconds * (0.05 + (0.9 * i / (samples + 1))));
+            var seconds = (int)(duration.Value.TotalSeconds * (start + (span * i / (samples + 1))));
             var stderr = await RunAsync(
                 _mediaEncoder.EncoderPath,
                 [
                     "-nostdin", "-hide_banner", "-ss", seconds.ToString(CultureInfo.InvariantCulture),
-                    "-i", item.Path, "-map", "0:v:0",
+                    "-i", item.Path, "-map", "0:V:0",
                     "-vf", $"cropdetect=limit={limit}:round=2:reset=0",
-                    "-frames:v", Math.Max(2, config.FramesPerSample).ToString(CultureInfo.InvariantCulture),
+                    "-frames:v", config.FramesPerSample.ToString(CultureInfo.InvariantCulture),
                     "-an", "-sn", "-f", "null", "-",
                 ],
                 readStdout: false,
+                timeout,
                 cancellationToken).ConfigureAwait(false);
 
             var match = CropRegex().Matches(stderr).LastOrDefault();
@@ -147,7 +170,7 @@ public sealed partial class AspectRatioDetector
 
         if (tops.Count < samples / 2)
         {
-            _logger.LogWarning("{Name}: only {Count}/{Samples} cropdetect samples succeeded", item.Name, tops.Count, samples);
+            LogTooFewSamples(item.Name, tops.Count, samples);
             return null;
         }
 
@@ -176,12 +199,13 @@ public sealed partial class AspectRatioDetector
         return values[lo] + ((values[hi] - values[lo]) * (pos - lo));
     }
 
-    private async Task<(TimeSpan? Duration, double PixelAspect, int Width, int Height)> ProbeAsync(string path, CancellationToken cancellationToken)
+    private async Task<(TimeSpan? Duration, double PixelAspect, int Width, int Height)> ProbeAsync(string path, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var stdout = await RunAsync(
             _mediaEncoder.ProbePath,
-            ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,sample_aspect_ratio:format=duration", "-of", "json", path],
+            ["-v", "error", "-select_streams", "V:0", "-show_entries", "stream=width,height,sample_aspect_ratio:format=duration", "-of", "json", path],
             readStdout: true,
+            timeout,
             cancellationToken).ConfigureAwait(false);
 
         TimeSpan? duration = null;
@@ -214,13 +238,13 @@ public sealed partial class AspectRatioDetector
         }
         catch (JsonException)
         {
-            _logger.LogWarning("ffprobe returned unreadable output for {Path}", path);
+            LogUnreadableProbe(path);
         }
 
         return (duration, pixelAspect, width, height);
     }
 
-    private async Task<string> RunAsync(string fileName, IEnumerable<string> args, bool readStdout, CancellationToken cancellationToken)
+    private async Task<string> RunAsync(string fileName, IEnumerable<string> args, bool readStdout, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var psi = new ProcessStartInfo(fileName)
         {
@@ -239,11 +263,11 @@ public sealed partial class AspectRatioDetector
         var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
 
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(SampleTimeout);
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(timeout);
         try
         {
-            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -256,7 +280,7 @@ public sealed partial class AspectRatioDetector
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            _logger.LogWarning("{File} timed out", Path.GetFileName(fileName));
+            LogTimedOut(Path.GetFileName(fileName));
             return string.Empty;
         }
 
@@ -265,4 +289,19 @@ public sealed partial class AspectRatioDetector
 
     [GeneratedRegex(@"crop=(?<w>\d+):(?<h>\d+):(?<x>\d+):(?<y>\d+)")]
     private static partial Regex CropRegex();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "{Name}: aspect ratio {Ratio} ({Source})")]
+    private partial void LogDetected(string name, double? ratio, RatioSource source);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{Name}: no usable duration or frame size, skipping cropdetect")]
+    private partial void LogNoDuration(string name);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{Name}: only {Count}/{Samples} cropdetect samples succeeded")]
+    private partial void LogTooFewSamples(string name, int count, int samples);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "ffprobe returned unreadable output for {Path}")]
+    private partial void LogUnreadableProbe(string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{File} timed out")]
+    private partial void LogTimedOut(string file);
 }

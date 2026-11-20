@@ -23,7 +23,7 @@ public sealed record PlaybackPayload(
     [property: JsonPropertyName("stream_ratio")] double? StreamRatio,
     [property: JsonPropertyName("session_id")] string? SessionId = null);
 
-public sealed class PlaybackNotifier : IHostedService
+public sealed partial class PlaybackNotifier : IHostedService
 {
     private readonly ISessionManager _sessionManager;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -81,18 +81,18 @@ public sealed class PlaybackNotifier : IHostedService
 
     public async Task<bool> SendAsync(PlaybackPayload payload, CancellationToken cancellationToken)
     {
-        var url = Plugin.Instance?.Configuration.GetWebhookUrl();
-        if (url is null)
+        var config = Plugin.Instance?.Configuration;
+        if (config?.GetWebhookUrl() is not { } url)
         {
             return false;
         }
 
         using var client = _httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(10);
+        client.Timeout = TimeSpan.FromSeconds(config.WebhookTimeoutSeconds);
         using var response = await client.PostAsJsonAsync(url, payload, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("Webhook returned {Status} for {Name}", (int)response.StatusCode, payload.Name);
+            LogWebhookStatus((int)response.StatusCode, payload.Name);
         }
 
         return response.IsSuccessStatusCode;
@@ -103,24 +103,47 @@ public sealed class PlaybackNotifier : IHostedService
         try
         {
             var config = Plugin.Instance?.Configuration;
-            if (config?.GetWebhookUrl() is null || e.Item is not Video item)
+            if (config is null || e.Item is not Video item)
             {
                 return;
             }
-
-            var device = e.DeviceName ?? e.Session?.DeviceName;
-            var payload = BuildPayload(item, device, e.ClientName ?? e.Session?.Client, e.Session?.UserName, sessionId: e.Session?.Id);
-            _logger.LogInformation("{Device} started {Name}: ratio {Ratio} ({Source})", device, payload.Name, payload.Ratio, payload.RatioSource);
-            await SendAsync(payload, CancellationToken.None).ConfigureAwait(false);
 
             if (_store.Get(item.Id) is null && AspectRatioDetector.IsCandidate(item, config))
             {
                 _scanQueue.Enqueue(item.Id);
             }
+
+            if (config.GetWebhookUrl() is null)
+            {
+                return;
+            }
+
+            var device = e.DeviceName ?? e.Session?.DeviceName;
+            if (!config.IsDeviceAllowed(device))
+            {
+                LogDeviceSkipped(device);
+                return;
+            }
+
+            var payload = BuildPayload(item, device, e.ClientName ?? e.Session?.Client, e.Session?.UserName, sessionId: e.Session?.Id);
+            LogPlaybackStarted(device, payload.Name, payload.Ratio, payload.RatioSource);
+            await SendAsync(payload, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send playback webhook");
+            LogWebhookFailed(ex);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Webhook returned {Status} for {Name}")]
+    private partial void LogWebhookStatus(int status, string name);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "{Device} started {Name}: ratio {Ratio} ({Source})")]
+    private partial void LogPlaybackStarted(string? device, string name, double? ratio, string source);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{Device} is not in the device allowlist, skipping webhook")]
+    private partial void LogDeviceSkipped(string? device);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to send playback webhook")]
+    private partial void LogWebhookFailed(Exception ex);
 }

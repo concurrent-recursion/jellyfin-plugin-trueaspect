@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TrueAspect.ScheduledTasks;
 
-public sealed class DetectAspectRatiosTask : IScheduledTask
+public sealed partial class DetectAspectRatiosTask : IScheduledTask
 {
     private readonly ILibraryManager _libraryManager;
     private readonly AspectRatioDetector _detector;
@@ -70,31 +70,44 @@ public sealed class DetectAspectRatiosTask : IScheduledTask
             .Where(v => AspectRatioDetector.IsCandidate(v, config))
             .ToList();
 
-        var live = items.Select(i => i.Id).ToHashSet();
-        var pruned = _store.RemoveWhere(e => !live.Contains(e.ItemId) && e.Source != RatioSource.Manual);
+        var stale = _store.GetAll()
+            .Where(e => e.Source != RatioSource.Manual && _libraryManager.GetItemById(e.ItemId) is null)
+            .Select(e => e.ItemId)
+            .ToHashSet();
+        var pruned = _store.RemoveWhere(e => stale.Contains(e.ItemId) && e.Source != RatioSource.Manual);
         if (pruned > 0)
         {
-            _logger.LogInformation("Removed {Count} entries for items no longer in the library", pruned);
+            LogPruned(pruned);
         }
 
         var todo = items.Where(i => _store.Get(i.Id) is null).ToList();
-        _logger.LogInformation("{Total} candidate items, {Todo} need scanning", items.Count, todo.Count);
+        LogCandidates(items.Count, todo.Count);
 
-        for (var i = 0; i < todo.Count; i++)
+        var done = 0;
+        var options = new ParallelOptions { MaxDegreeOfParallelism = config.MaxConcurrentScans, CancellationToken = cancellationToken };
+        await Parallel.ForEachAsync(todo, options, async (item, ct) =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                await _detector.DetectAsync(todo[i], cancellationToken).ConfigureAwait(false);
+                await _detector.DetectAsync(item, ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _logger.LogError(ex, "Aspect ratio detection failed for {Name}", todo[i].Name);
+                LogDetectionFailed(ex, item.Name);
             }
 
-            progress.Report(100.0 * (i + 1) / todo.Count);
-        }
+            progress.Report(100.0 * Interlocked.Increment(ref done) / todo.Count);
+        }).ConfigureAwait(false);
 
         progress.Report(100);
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Removed {Count} entries for items no longer in the library")]
+    private partial void LogPruned(int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "{Total} candidate items, {Todo} need scanning")]
+    private partial void LogCandidates(int total, int todo);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Aspect ratio detection failed for {Name}")]
+    private partial void LogDetectionFailed(Exception ex, string name);
 }
