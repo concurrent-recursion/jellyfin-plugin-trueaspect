@@ -6,7 +6,17 @@
         "overview": "Letterbox-aware aspect ratio detection with playback webhooks.",
         "owner": "concurrent_recursion",
         "category": "General",
+        "image": "trueaspect.png",
+        "imageUrl": "https://concurrent-recursion.github.io/jellyfin-plugin-trueaspect/trueaspect/trueaspect.png",
         "versions": [
+            {
+                "version": "1.0.1.0",
+                "changelog": "New plugin icon. The detector now releases its scan lock cleanly when Jellyfin shuts down. Behind the scenes the code builds with the Jellyfin plugin template's analyzers and treats warnings as errors, and the repo gained debug setups for Rider and VS Code. Settings, stored results, the API and the webhook payload are unchanged.",
+                "targetAbi": "12.0.0.0",
+                "sourceUrl": "https://github.com/concurrent-recursion/jellyfin-plugin-trueaspect/releases/download/v1.0.1.0/trueaspect_1.0.1.0.zip",
+                "checksum": "9f7ef2593330a682e3e1d44ab33664d1",
+                "timestamp": "2026-11-20T04:19:26Z"
+            },
             {
                 "version": "1.0.0.0",
                 "changelog": "Initial release: cropdetect-based aspect ratio detection, a scheduled scan task, automatic scans of new items, manual overrides and a Home Assistant playback webhook.",
@@ -15,8 +25,6 @@
                 "checksum": "1371458febcc24f7ed2314a7593ce59d",
                 "timestamp": "2026-11-20T03:48:40Z"
             }
-        ],
-        "image": "trueaspect.png",
-        "imageUrl": "https://concurrent-recursion.github.io/jellyfin-plugin-trueaspect/trueaspect/trueaspect.png"
+        ]
     }
 ]
